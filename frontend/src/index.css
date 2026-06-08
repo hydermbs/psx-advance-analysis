@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+:root {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #0b0f19;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Theme colors */
+  --bg-primary: #070a13;
+  --bg-secondary: #0f1524;
+  --bg-card: rgba(21, 30, 52, 0.5);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(59, 130, 246, 0.5);
+  
+  --color-buy: #10b981;
+  --color-buy-glow: rgba(16, 185, 129, 0.15);
+  --color-sell: #ef4444;
+  --color-sell-glow: rgba(239, 68, 68, 0.15);
+  --color-hold: #f59e0b;
+  --color-hold-glow: rgba(245, 158, 11, 0.15);
+  --color-accent: #3b82f6;
+  
+  --text-muted: #94a3b8;
+  --text-main: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: radial-gradient(circle at top right, #111a33, #070a13);
+  overflow-x: hidden;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Micro-animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 10px var(--glow-color);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 20px var(--glow-color);
+  }
+}
+
+.glow-buy {
+  --glow-color: rgba(16, 185, 129, 0.4);
+  animation: pulse-glow 3s infinite;
+}
+
+.glow-sell {
+  --glow-color: rgba(239, 68, 68, 0.4);
+  animation: pulse-glow 3s infinite;
+}
+
+.glow-hold {
+  --glow-color: rgba(245, 158, 11, 0.4);
+  animation: pulse-glow 3s infinite;
+}
+
+/* Thin scrollbar utility referenced by components */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .glow-buy,
+  .glow-sell,
+  .glow-hold {
+    animation: none;
+  }
+}

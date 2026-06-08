@@ -1,0 +1,75 @@
+# ───── Python / backend ─────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+backend/venv/
+backend/.venv/
+
+# Test / coverage / type caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ───── Node / frontend ─────
+# (frontend/.gitignore covers most; these guard the repo root)
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ───── Environment / secrets ─────
+.env
+.env.*
+!.env.example
+*.pem
+
+# ───── OS ─────
+.DS_Store
+Thumbs.db
+
+# ───── Editors / IDEs ─────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ───── Misc ─────
+.omc/
