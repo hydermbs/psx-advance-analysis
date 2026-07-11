@@ -1,4 +1,4 @@
-# Antigravity Stock Technical Analysis Dashboard
+# PSX Stock Technical Analysis Dashboard
 
 An automated, premium technical analysis dashboard that integrates a FastAPI backend and a React (Vite + TypeScript) frontend to fetch, analyze, and visualize equity market data. The app is preconfigured for the Pakistan Stock Exchange (PSX), but is built on an exchange-agnostic data adapter architecture. 
 

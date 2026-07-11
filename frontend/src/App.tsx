@@ -163,7 +163,7 @@ function App() {
             </div>
             <div className="mr-4">
               <h1 className="text-sm font-extrabold tracking-tight text-primary uppercase">
-                Antigravity TA
+                PSX TA
               </h1>
               <p className="text-[9px] text-on-surface-variant font-bold tracking-wider uppercase">
                 A complete Automated Analysis
