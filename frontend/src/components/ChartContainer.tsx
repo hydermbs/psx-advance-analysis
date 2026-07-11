@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType, CandlestickSeries, LineSeries, HistogramSeries,createSeriesMarkers } from 'lightweight-charts';
 import type { ISeriesApi, SeriesMarker, CandlestickData } from 'lightweight-charts';
-import { Eye, EyeOff, TrendingUp } from 'lucide-react';
 
 interface ChartDataPoint {
   time: string;
@@ -36,7 +35,7 @@ interface ChartContainerProps {
   symbol: string;
 }
 
-export const ChartContainer: React.FC<ChartContainerProps> = ({ data, patterns, timeframe, symbol }) => {
+export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patterns = [], timeframe, symbol }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [showEma20, setShowEma20] = useState(true);
   const [showEma50, setShowEma50] = useState(true);
@@ -61,19 +60,19 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data, patterns, 
     // Create main price chart
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#0f1524' },
-        textColor: '#94a3b8',
+        background: { type: ColorType.Solid, color: '#ffffff' },
+        textColor: '#191c1e',
       },
       grid: {
-        vertLines: { color: 'rgba(148, 163, 184, 0.05)' },
-        horzLines: { color: 'rgba(148, 163, 184, 0.05)' },
+        vertLines: { color: 'rgba(15, 23, 42, 0.04)' },
+        horzLines: { color: 'rgba(15, 23, 42, 0.04)' },
       },
       rightPriceScale: {
-        borderColor: 'rgba(148, 163, 184, 0.1)',
+        borderColor: 'rgba(15, 23, 42, 0.08)',
         autoScale: true,
       },
       timeScale: {
-        borderColor: 'rgba(148, 163, 184, 0.1)',
+        borderColor: 'rgba(15, 23, 42, 0.08)',
         timeVisible: timeframe === 'int',
         secondsVisible: false,
       },
@@ -84,18 +83,18 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data, patterns, 
     chartRef.current = chart;
 
     // Add Candlestick Series
-    const candleSeries = chart.addSeries(CandlestickSeries,{
-      upColor: '#10b981',
-      downColor: '#ef4444',
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#006e2f',
+      downColor: '#ba1a1a',
       borderVisible: false,
-      wickUpColor: '#10b981',
-      wickDownColor: '#ef4444',
+      wickUpColor: '#006e2f',
+      wickDownColor: '#ba1a1a',
     });
     candleSeriesRef.current = candleSeries;
 
     // Add Volume Series (overlaid on price chart with its own transparent scale)
-    const volumeSeries = chart.addSeries(HistogramSeries,{
-      color: '#26a69a',
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      color: '#cbd5e1',
       priceFormat: {
         type: 'volume',
       },
@@ -111,14 +110,14 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data, patterns, 
     volumeSeriesRef.current = volumeSeries;
 
     // Add EMAs
-    ema20SeriesRef.current = chart.addSeries(LineSeries,{ color: '#3b82f6', lineWidth: 2, title: 'EMA 20' });
-    ema50SeriesRef.current = chart.addSeries(LineSeries,{ color: '#f59e0b', lineWidth: 2, title: 'EMA 50' });
-    ema200SeriesRef.current = chart.addSeries(LineSeries,{ color: '#ec4899', lineWidth: 2, title: 'EMA 200' });
+    ema20SeriesRef.current = chart.addSeries(LineSeries, { color: '#005321', lineWidth: 2, title: 'EMA 20' });
+    ema50SeriesRef.current = chart.addSeries(LineSeries, { color: '#da9100', lineWidth: 2, title: 'EMA 50' });
+    ema200SeriesRef.current = chart.addSeries(LineSeries, { color: '#ba1a1a', lineWidth: 2, title: 'EMA 200' });
 
     // Add Bollinger Bands
-    bbUpperSeriesRef.current = chart.addSeries(LineSeries,{ color: '#8b5cf6', lineWidth: 2, lineStyle: 1, title: 'BB Upper' });
-    bbMiddleSeriesRef.current = chart.addSeries(LineSeries,{ color: '#8b5cf6', lineWidth: 2, lineStyle: 2, title: 'BB Middle' });
-    bbLowerSeriesRef.current = chart.addSeries(LineSeries,{ color: '#8b5cf6', lineWidth: 2, lineStyle: 1, title: 'BB Lower' });
+    bbUpperSeriesRef.current = chart.addSeries(LineSeries, { color: '#76777d', lineWidth: 1, lineStyle: 1, title: 'BB Upper' });
+    bbMiddleSeriesRef.current = chart.addSeries(LineSeries, { color: '#c6c6cd', lineWidth: 1, lineStyle: 2, title: 'BB Middle' });
+    bbLowerSeriesRef.current = chart.addSeries(LineSeries, { color: '#76777d', lineWidth: 1, lineStyle: 1, title: 'BB Lower' });
 
     // Handle resize
     const handleResize = () => {
@@ -246,7 +245,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data, patterns, 
           markers.push({
             time: timeVal as any,
             position: pat.type === 'bullish' ? 'belowBar' : pat.type === 'bearish' ? 'aboveBar' : 'inBar',
-            color: pat.type === 'bullish' ? '#10b981' : pat.type === 'bearish' ? '#ef4444' : '#f59e0b',
+            color: pat.type === 'bullish' ? '#006e2f' : pat.type === 'bearish' ? '#ba1a1a' : '#76777d',
             shape: pat.type === 'bullish' ? 'arrowUp' : pat.type === 'bearish' ? 'arrowDown' : 'circle',
             text: pat.pattern,
           });
@@ -257,98 +256,113 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data, patterns, 
   }, [data, showEma20, showEma50, showEma200, showBB, patterns, timeframe]);
 
   return (
-    <div className="glass-panel p-4 flex flex-col gap-4 w-full" style={{ minHeight: '520px' }}>
+    <div className="glass-panel p-5 flex flex-col gap-4 w-full" style={{ minHeight: '600px' }}>
       {/* Header controls */}
-      <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] pb-3 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="text-blue-500 w-5 h-5" />
-          <h2 className="text-xl font-bold tracking-tight">{symbol} Technical Chart</h2>
-          <span className="text-xs bg-blue-900/40 text-blue-400 border border-blue-800/40 px-2 py-0.5 rounded uppercase font-semibold">
-            {timeframe === 'int' ? '5M Intraday' : '1D EOD'}
+      <div className="flex items-center justify-between border-b border-outline-variant pb-3 flex-wrap gap-2">
+        <div style={{ margin: '5px 5px 5px 5px' }} className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-secondary text-[24px]">query_stats</span>
+          <h2 className="text-base font-bold tracking-tight text-on-surface">{symbol} Technical Chart</h2>
+          <span className="text-[10px] bg-primary text-on-primary px-2.5 py-0.5 rounded font-bold uppercase tracking-wider">
+            {timeframe === 'int' ? '4H Intraday' : '1D EOD'}
           </span>
         </div>
         
         {/* Toggle Overlays */}
-        <div className="flex items-center gap-2 text-xs">
+        <div style={{ margin: '5px 5px 5px 5px' }} className="flex items-center gap-1.5 text-xs">
           <button
+            style={{ padding: '5px 5px 5px 5px' }}
             onClick={() => setShowEma20(!showEma20)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded border transition-all ${
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full border transition-all cursor-pointer active:scale-[0.98] ${
               showEma20 
-                ? 'bg-blue-600/20 border-blue-500/30 text-blue-400 font-medium' 
-                : 'bg-transparent border-[rgba(255,255,255,0.08)] text-slate-400'
+                ? 'bg-secondary/15 border-secondary/30 text-secondary font-bold' 
+                : 'bg-surface-container-low border-outline-variant text-on-surface-variant hover:bg-surface-container'
             }`}
           >
-            {showEma20 ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            <span className="material-symbols-outlined text-[14px]">
+              {showEma20 ? 'visibility' : 'visibility_off'}
+            </span>
             EMA 20
           </button>
           <button
+            style={{ padding: '5px 5px 5px 5px' }}
             onClick={() => setShowEma50(!showEma50)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded border transition-all ${
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full border transition-all cursor-pointer active:scale-[0.98] ${
               showEma50 
-                ? 'bg-amber-600/20 border-amber-500/30 text-amber-400 font-medium' 
-                : 'bg-transparent border-[rgba(255,255,255,0.08)] text-slate-400'
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-700 font-bold' 
+                : 'bg-surface-container-low border-outline-variant text-on-surface-variant hover:bg-surface-container'
             }`}
           >
-            {showEma50 ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            <span className="material-symbols-outlined text-[14px]">
+              {showEma50 ? 'visibility' : 'visibility_off'}
+            </span>
             EMA 50
           </button>
           <button
+            style={{ padding: '5px 5px 5px 5px' }}
             onClick={() => setShowEma200(!showEma200)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded border transition-all ${
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full border transition-all cursor-pointer active:scale-[0.98] ${
               showEma200 
-                ? 'bg-pink-600/20 border-pink-500/30 text-pink-400 font-medium' 
-                : 'bg-transparent border-[rgba(255,255,255,0.08)] text-slate-400'
+                ? 'bg-error-container border-error/20 text-error font-bold' 
+                : 'bg-surface-container-low border-outline-variant text-on-surface-variant hover:bg-surface-container'
             }`}
           >
-            {showEma200 ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            <span className="material-symbols-outlined text-[14px]">
+              {showEma200 ? 'visibility' : 'visibility_off'}
+            </span>
             EMA 200
           </button>
           <button
+            style={{ padding: '5px 5px 5px 5px' }}
             onClick={() => setShowBB(!showBB)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded border transition-all ${
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full border transition-all cursor-pointer active:scale-[0.98] ${
               showBB 
-                ? 'bg-purple-600/20 border-purple-500/30 text-purple-400 font-medium' 
-                : 'bg-transparent border-[rgba(255,255,255,0.08)] text-slate-400'
+                ? 'bg-primary-fixed text-primary border-primary-fixed-dim font-bold' 
+                : 'bg-surface-container-low border-outline-variant text-on-surface-variant hover:bg-surface-container'
             }`}
           >
-            {showBB ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            <span className="material-symbols-outlined text-[14px]">
+              {showBB ? 'visibility' : 'visibility_off'}
+            </span>
             Bands
           </button>
         </div>
       </div>
 
       {/* Main chart rendering container */}
-      <div ref={chartContainerRef} className="relative w-full rounded-lg overflow-hidden border border-[rgba(255,255,255,0.04)]" />
+      <div ref={chartContainerRef} className="relative w-full rounded-lg overflow-hidden border border-outline-variant bg-white" />
 
       {/* Indicator Sub-tabs (RSI / MACD indicator views) */}
-      <div className="flex flex-col gap-2 mt-2">
-        <div className="flex border-b border-[rgba(255,255,255,0.06)]">
+      <div style = {{alignItems: 'center', justifyContent: 'center'}}className="flex flex-col gap-2 mt-2">
+        <div style={{ margin: '5px 10px 5px 10px' }} className="flex border-b border-outline-variant">
           <button
+            style={{ padding: '5px 5px 5px 5px' }}
             onClick={() => setIndicatorTab('volume')}
-            className={`px-4 py-2 text-xs font-semibold border-b-2 transition-all ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
               indicatorTab === 'volume' 
-                ? 'border-blue-500 text-blue-400' 
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-primary text-primary' 
+                : 'border-transparent text-on-surface-variant hover:text-on-surface'
             }`}
           >
             Volume Analysis
           </button>
           <button
+            style={{ padding: '5px 10px 5px 10px' }}
             onClick={() => setIndicatorTab('rsi')}
-            className={`px-4 py-2 text-xs font-semibold border-b-2 transition-all ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
               indicatorTab === 'rsi' 
-                ? 'border-blue-500 text-blue-400' 
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-primary text-primary' 
+                : 'border-transparent text-on-surface-variant hover:text-on-surface'
             }`}
           >
             RSI (14)
           </button>
           <button
+            style={{ padding: '5px 10px 5px 10px' }}
             onClick={() => setIndicatorTab('macd')}
-            className={`px-4 py-2 text-xs font-semibold border-b-2 transition-all ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
               indicatorTab === 'macd' 
-                ? 'border-blue-500 text-blue-400' 
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-primary text-primary' 
+                : 'border-transparent text-on-surface-variant hover:text-on-surface'
             }`}
           >
             MACD Histogram
@@ -356,42 +370,42 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data, patterns, 
         </div>
 
         {/* Tab contents */}
-        <div className="bg-[#0b0f19]/40 rounded-lg p-3 border border-[rgba(255,255,255,0.03)] text-xs min-h-[80px]">
+        <div style={{ margin: '10px 5px 5px 5px' }} className="bg-surface-container-low rounded-xl p-4 border border-outline-variant text-xs min-h-[90px]">
           {indicatorTab === 'volume' && (
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between text-slate-400">
-                <span>Latest Vol: {data[data.length - 1]?.volume.toLocaleString()} shares</span>
-                <span>Avg Vol (20): {(data.slice(-20).reduce((acc, curr) => acc + curr.volume, 0) / 20).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            <div style={{ margin: '10px 5px 5px 5px' }} className="flex flex-col gap-2">
+              <div  className="flex justify-between text-on-surface font-medium tabular-nums">
+                <span>Latest Vol: <strong className="text-primary">{data[data.length - 1]?.volume.toLocaleString()}</strong> shares</span>
+                <span>Avg Vol (20): <strong className="text-primary">{(data.slice(-20).reduce((acc, curr) => acc + curr.volume, 0) / 20).toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></span>
               </div>
-              <p className="text-slate-500 leading-relaxed mt-1">
+              <p className="text-on-surface-variant leading-relaxed mt-1">
                 Volume spikes denote institutional interest. Tying price breakouts with above-average volume yields higher signal success probability.
               </p>
             </div>
           )}
 
           {indicatorTab === 'rsi' && (
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Current RSI:</span>
-                <span className={`font-bold px-2 py-0.5 rounded ${
+            <div style={{ margin: '10px 5px 5px 5px' }} className="flex flex-col gap-2">
+              <div className="flex justify-between items-center font-medium">
+                <span className="text-on-surface">Current RSI (14):</span>
+                <span className={`font-bold px-2 py-0.5 rounded text-[11px] tabular-nums ${
                   (data[data.length - 1]?.rsi ?? 50) <= 30 
-                    ? 'text-emerald-400 bg-emerald-950/20' 
+                    ? 'text-secondary bg-secondary-fixed/30 border border-secondary-fixed' 
                     : (data[data.length - 1]?.rsi ?? 50) >= 70 
-                    ? 'text-rose-400 bg-rose-950/20' 
-                    : 'text-blue-400'
+                    ? 'text-error bg-error-container border border-error/20' 
+                    : 'text-primary bg-surface-container border border-outline-variant'
                 }`}>
                   {data[data.length - 1]?.rsi?.toFixed(2) ?? 'N/A'}
                 </span>
               </div>
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden relative mt-1">
+              <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden relative mt-1">
                 {/* Oversold boundary 30% */}
-                <div className="absolute left-[30%] right-[30%] top-0 bottom-0 bg-slate-700/60" />
+                <div className="absolute left-[30%] right-[30%] top-0 bottom-0 bg-surface-container-high" />
                 <div 
-                  className="absolute top-0 bottom-0 bg-blue-500 w-2 h-2 rounded-full transition-all duration-300"
+                  className="absolute top-0 bottom-0 bg-primary w-2 h-2 rounded-full transition-all duration-300"
                   style={{ left: `${data[data.length - 1]?.rsi ?? 50}%`, transform: 'translateX(-50%)' }}
                 />
               </div>
-              <div className="flex justify-between text-[10px] text-slate-500">
+              <div className="flex justify-between text-[10px] text-on-surface-variant/80 font-bold uppercase tracking-wider">
                 <span>30 (Oversold)</span>
                 <span>50 (Mid)</span>
                 <span>70 (Overbought)</span>
@@ -400,15 +414,15 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data, patterns, 
           )}
 
           {indicatorTab === 'macd' && (
-            <div className="flex flex-col gap-2">
-              <div className="grid grid-cols-3 text-slate-400">
-                <div>MACD: <span className="font-semibold text-slate-200">{data[data.length - 1]?.macd_line?.toFixed(3) ?? 'N/A'}</span></div>
-                <div>Signal: <span className="font-semibold text-slate-200">{data[data.length - 1]?.macd_signal?.toFixed(3) ?? 'N/A'}</span></div>
-                <div>Hist: <span className={`font-semibold ${
-                  (data[data.length - 1]?.macd_hist ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+            <div style={{ margin: '10px 5px 5px 5px' }} className="flex flex-col gap-2">
+              <div className="grid grid-cols-3 text-on-surface font-medium tabular-nums gap-4">
+                <div>MACD: <span className="font-bold text-primary">{data[data.length - 1]?.macd_line?.toFixed(3) ?? 'N/A'}</span></div>
+                <div>Signal: <span className="font-bold text-primary">{data[data.length - 1]?.macd_signal?.toFixed(3) ?? 'N/A'}</span></div>
+                <div>Hist: <span className={`font-bold ${
+                  (data[data.length - 1]?.macd_hist ?? 0) >= 0 ? 'text-secondary' : 'text-error'
                 }`}>{data[data.length - 1]?.macd_hist?.toFixed(3) ?? 'N/A'}</span></div>
               </div>
-              <p className="text-slate-500 mt-1 leading-relaxed">
+              <p className="text-on-surface-variant mt-1 leading-relaxed">
                 MACD crossovers denote shifts in momentum. Crossovers matching Dow Theory trends yield high-confidence entry trigger markers.
               </p>
             </div>

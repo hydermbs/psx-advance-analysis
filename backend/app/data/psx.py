@@ -115,11 +115,11 @@ class PSXDataAdapter(BaseDataAdapter):
                 df = pd.DataFrame(parsed_records)
                 df = df.sort_values('date')
                 
-                # Aggregate trades into 5-minute candles
+                # Aggregate trades into 4-hour candles
                 df.set_index('date', inplace=True)
                 
                 # Resample: open is first price, high is max, low is min, close is last, volume is sum
-                resampled = df.resample('5Min').agg({
+                resampled = df.resample('4h').agg({
                     'price': ['first', 'max', 'min', 'last'],
                     'volume': 'sum'
                 })

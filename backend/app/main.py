@@ -55,8 +55,16 @@ async def get_analysis(symbol: str, timeframe: str = Query("1d", regex="^(1d|int
                 detail=f"No data returned for symbol '{symbol}' with timeframe '{timeframe}'"
             )
             
-        # Run pipeline
-        analysis_result = run_analysis_pipeline(df)
+        # Intraday 4H candles from PSX only cover the current session (~2 bars),
+        # so use a lower bar minimum than daily EOD analysis.
+        min_bars = 2 if timeframe == 'int' else 20
+        analysis_result = run_analysis_pipeline(df, min_bars=min_bars)
+
+        if analysis_result.get('status') == 'error':
+            raise HTTPException(
+                status_code=444,
+                detail=analysis_result.get('message', 'Insufficient data for analysis')
+            )
         
         # Add basic symbol info to response
         analysis_result['symbol'] = symbol

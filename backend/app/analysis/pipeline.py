@@ -5,14 +5,14 @@ from app.analysis.market_structure import get_market_structure
 from app.analysis.candlesticks import detect_candlestick_patterns
 from app.analysis.confluence import get_confluence_signal
 
-def run_analysis_pipeline(df: pd.DataFrame) -> Dict[str, Any]:
+def run_analysis_pipeline(df: pd.DataFrame, min_bars: int = 20) -> Dict[str, Any]:
     """
     Orchestrates all analysis modules on a standardized OHLCV DataFrame.
     """
-    if df.empty or len(df) < 20:
+    if df.empty or len(df) < min_bars:
         return {
             'status': 'error',
-            'message': 'Insufficient data points (minimum 20 required)',
+            'message': f'Insufficient data points (minimum {min_bars} required, got {len(df)})',
             'data': {}
         }
         

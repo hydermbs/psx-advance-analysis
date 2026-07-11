@@ -1,38 +1,85 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+@theme {
+  --color-primary: #000000;
+  --color-secondary: #006e2f;
+  --color-tertiary: #000000;
+  --color-error: #ba1a1a;
+  --color-secondary-fixed: #6bff8f;
+  --color-primary-container: #131b2e;
+  --color-inverse-surface: #2d3133;
+  --color-on-error: #ffffff;
+  --color-on-background: #191c1e;
+  --color-on-primary-fixed-variant: #3f465c;
+  --color-on-secondary-fixed-variant: #005321;
+  --color-on-tertiary-fixed: #410004;
+  --color-secondary-container: #6bff8f;
+  --color-on-secondary-container: #007432;
+  --color-surface-container-low: #f2f4f6;
+  --color-surface-tint: #565e74;
+  --color-surface-bright: #f7f9fb;
+  --color-on-surface: #191c1e;
+  --color-surface-container: #eceef0;
+  --color-on-tertiary-container: #ef4444;
+  --color-inverse-on-surface: #eff1f3;
+  --color-secondary-fixed-dim: #4ae176;
+  --color-on-secondary-fixed: #002109;
+  --color-primary-fixed: #dae2fd;
+  --color-inverse-primary: #bec6e0;
+  --color-on-tertiary: #ffffff;
+  --color-on-primary-fixed: #131b2e;
+  --color-error-container: #ffdad6;
+  --color-tertiary-fixed-dim: #ffb3ad;
+  --color-tertiary-container: #410004;
+  --color-outline-variant: #e2e8f0;
+  --color-surface-variant: #e0e3e5;
+  --color-surface-container-high: #e6e8ea;
+  --color-on-primary-container: #7c839b;
+  --color-primary-fixed-dim: #bec6e0;
+  --color-surface-dim: #d8dadc;
+  --color-outline: #76777d;
+  --color-on-tertiary-fixed-variant: #930013;
+  --color-background: #f7f9fb;
+  --color-tertiary-fixed: #ffdad7;
+  --color-surface: #f7f9fb;
+  --color-on-error-container: #93000a;
+  --color-on-primary: #ffffff;
+  --color-on-surface-variant: #45464d;
+  --color-on-secondary: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+
+  --radius-DEFAULT: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+
+  --spacing-touch-target: 2.75rem;
+  --spacing-card-padding: 1.25rem;
+  --spacing-container-margin: 1rem;
+  --spacing-stack-gap: 0.75rem;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+}
+
 :root {
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-sans);
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #0b0f19;
-
+  color-scheme: light;
+  color: var(--color-on-surface);
+  background-color: var(--color-background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
 
-  /* Theme colors */
-  --bg-primary: #070a13;
-  --bg-secondary: #0f1524;
-  --bg-card: rgba(21, 30, 52, 0.5);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(59, 130, 246, 0.5);
-  
-  --color-buy: #10b981;
-  --color-buy-glow: rgba(16, 185, 129, 0.15);
-  --color-sell: #ef4444;
-  --color-sell-glow: rgba(239, 68, 68, 0.15);
-  --color-hold: #f59e0b;
-  --color-hold-glow: rgba(245, 158, 11, 0.15);
-  --color-accent: #3b82f6;
-  
-  --text-muted: #94a3b8;
-  --text-main: #f8fafc;
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 * {
@@ -45,21 +92,33 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(circle at top right, #111a33, #070a13);
+  background-color: var(--color-background);
+  color: var(--color-on-surface);
   overflow-x: hidden;
 }
 
-/* Glassmorphism utility */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  display: inline-block;
+  line-height: 1;
+}
+
+/* Glass-panel class mapped to Corporate Modern white cards with ambient shadows */
 .glass-panel {
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+  background-color: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 1rem; /* 16px */
+  box-shadow: 0px 4px 6px -1px rgba(15, 23, 42, 0.05), 0px 2px 4px -2px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.2s ease, transform 0.1s ease;
 }
 
 .glass-panel:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: var(--color-outline-variant);
+}
+
+.card-shadow {
+  box-shadow: 0px 4px 6px -1px rgba(15, 23, 42, 0.05), 0px 2px 4px -2px rgba(15, 23, 42, 0.05);
 }
 
 /* Scrollbar styles */
@@ -73,45 +132,80 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  background: var(--color-outline-variant);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-outline);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
 }
 
 /* Micro-animations */
-@keyframes pulse-glow {
+@keyframes pulse-glow-buy {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 10px var(--glow-color);
+    box-shadow: 0 0 8px rgba(0, 110, 47, 0.15);
   }
   50% {
     transform: scale(1.02);
-    box-shadow: 0 0 20px var(--glow-color);
+    box-shadow: 0 0 16px rgba(0, 110, 47, 0.3);
+  }
+}
+
+@keyframes pulse-glow-sell {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 8px rgba(186, 26, 26, 0.15);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 16px rgba(186, 26, 26, 0.3);
+  }
+}
+
+@keyframes pulse-glow-hold {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 8px rgba(118, 119, 125, 0.15);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 16px rgba(118, 119, 125, 0.3);
   }
 }
 
 .glow-buy {
-  --glow-color: rgba(16, 185, 129, 0.4);
-  animation: pulse-glow 3s infinite;
+  animation: pulse-glow-buy 3s infinite ease-in-out;
 }
 
 .glow-sell {
-  --glow-color: rgba(239, 68, 68, 0.4);
-  animation: pulse-glow 3s infinite;
+  animation: pulse-glow-sell 3s infinite ease-in-out;
 }
 
 .glow-hold {
-  --glow-color: rgba(245, 158, 11, 0.4);
-  animation: pulse-glow 3s infinite;
+  animation: pulse-glow-hold 3s infinite ease-in-out;
 }
 
 /* Thin scrollbar utility referenced by components */
 .scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
+}
+
+/* Numeric text tabular nums support */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Respect users who prefer reduced motion */
