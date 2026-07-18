@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ChartContainer } from './components/ChartContainer';
 import { SignalDashboard } from './components/SignalDashboard';
+import { WatchlistDashboard } from './components/WatchlistDashboard';
 import './App.css';
 
 interface StockInfo {
@@ -13,6 +14,7 @@ interface StockInfo {
 
 interface AnalysisPayload {
   symbol_data: any[];
+  timeframe: '1d' | 'int';
   market_structure: {
     dow_trend: string;
     market_stage: string;
@@ -38,6 +40,9 @@ function App() {
   const [analysis, setAnalysis] = useState<AnalysisPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Tabs navigation state
+  const [mainTab, setMainTab] = useState<'dashboard' | 'watchlist'>('dashboard');
   
   // Bottom Panel active tab
   const [bottomTab, setBottomTab] = useState<'patterns' | 'structure' | 'risk'>('patterns');
@@ -207,6 +212,7 @@ function App() {
                         onMouseDown={() => {
                           setSelectedSymbol(stock.symbol);
                           setSearchVal('');
+                          setLoading(true);
                         }}
                         className="w-full text-left px-3.5 py-2 hover:bg-surface-container rounded-lg transition-colors cursor-pointer flex items-center justify-between group active:scale-[0.99] border-none"
                       >
@@ -224,31 +230,65 @@ function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Timeframe Toggles */}
+            {/* Navigation Tabs */}
             <div className="flex items-center gap-1 bg-surface-container border border-outline-variant p-1 rounded-full">
               <button
-                style={{ padding: '10px 10px 10px 10px' }}
-                onClick={() => setTimeframe('1d')}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                  timeframe === '1d'
+                style={{ padding: '10px 14px' }}
+                onClick={() => setMainTab('dashboard')}
+                className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer border-none bg-transparent ${
+                  mainTab === 'dashboard'
                     ? 'bg-primary text-on-primary shadow-sm'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
-                Daily EOD
+                Dashboard
               </button>
               <button
-                style={{ padding: '10px 10px 10px 10px' }}
-                onClick={() => setTimeframe('int')}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                  timeframe === 'int'
+                style={{ padding: '10px 14px' }}
+                onClick={() => setMainTab('watchlist')}
+                className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer border-none bg-transparent ${
+                  mainTab === 'watchlist'
                     ? 'bg-primary text-on-primary shadow-sm'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
-                Intraday 4H
+                Watchlist
               </button>
             </div>
+
+            {/* Timeframe Toggles */}
+            {mainTab === 'dashboard' && (
+              <div className="flex items-center gap-1 bg-surface-container border border-outline-variant p-1 rounded-full">
+                <button
+                  style={{ padding: '10px 10px 10px 10px' }}
+                  onClick={() => {
+                    setTimeframe('1d');
+                    setLoading(true);
+                  }}
+                  className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                    timeframe === '1d'
+                      ? 'bg-primary text-on-primary shadow-sm'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Daily EOD
+                </button>
+                <button
+                  style={{ padding: '10px 10px 10px 10px' }}
+                  onClick={() => {
+                    setTimeframe('int');
+                    setLoading(true);
+                  }}
+                  className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                    timeframe === 'int'
+                      ? 'bg-primary text-on-primary shadow-sm'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Intraday 15M
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -256,7 +296,17 @@ function App() {
         {/* Content Canvas */}
         <main className="flex-1 w-full p-6 bg-background flex justify-center overflow-y-auto custom-scrollbar">
           <div className="max-w-[1440px] w-full mx-auto space-y-6">
-            {/* Selected Ticker Quote Header */}
+            {mainTab === 'watchlist' ? (
+              <WatchlistDashboard 
+                stocks={stocks} 
+                onSelectSymbol={(sym) => {
+                  setSelectedSymbol(sym);
+                  setMainTab('dashboard');
+                }}
+              />
+            ) : (
+              <>
+                {/* Selected Ticker Quote Header */}
             {analysis && !loading && !error && (
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-outline-variant pb-4">
                 <div>
@@ -309,7 +359,7 @@ function App() {
                     <ChartContainer
                       data={analysis.symbol_data}
                       patterns={analysis.patterns}
-                      timeframe={timeframe}
+                      timeframe={analysis.timeframe}
                       symbol={selectedSymbol}
                     />
 
@@ -577,6 +627,8 @@ function App() {
                 )}
               </div>
             </div>
+            </>
+            )}
           </div>
         </main>
 

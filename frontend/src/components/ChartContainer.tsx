@@ -263,7 +263,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patte
           <span className="material-symbols-outlined text-secondary text-[24px]">query_stats</span>
           <h2 className="text-base font-bold tracking-tight text-on-surface">{symbol} Technical Chart</h2>
           <span className="text-[10px] bg-primary text-on-primary px-2.5 py-0.5 rounded font-bold uppercase tracking-wider">
-            {timeframe === 'int' ? '4H Intraday' : '1D EOD'}
+            {timeframe === 'int' ? '15M Intraday' : '1D EOD'}
           </span>
         </div>
         

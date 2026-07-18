@@ -32,7 +32,7 @@ The system works by fetching raw historical transaction/ohlcv data, normalizing 
 ### 1. Data Adapter Layer
 The data adapter (`app/data/psx.py`) handles EOD (End of Day) and Intraday queries.
 * **EOD Data**: Fetched from `/timeseries/eod/{symbol}`. Since PSX EOD feeds do not include daily High/Low values in the time-series array directly, the adapter dynamically approximates them using the mathematical range of Open/Close values to maintain downstream indicator integrity.
-* **Intraday Data**: Fetched from `/timeseries/int/{symbol}`. Raw intraday ticks are automatically resampled into standard **4-Hour candles** using a customized Pandas aggregation pipeline (`open` = first, `high` = max, `low` = min, `close` = last, `volume` = sum).
+* **Intraday Data**: Fetched from `/timeseries/int/{symbol}`. Raw intraday ticks are automatically resampled into standard **15-Minute candles** using a customized Pandas aggregation pipeline (`open` = first, `high` = max, `low` = min, `close` = last, `volume` = sum).
 
 ### 2. Analysis Pipeline
 Once a standardized Pandas DataFrame `[date, open, high, low, close, volume]` is loaded, the pipeline (`app/analysis/pipeline.py`) runs the following components:

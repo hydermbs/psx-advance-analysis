@@ -1,19 +1,35 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from app.data.registry import get_data_adapter
 from app.analysis.pipeline import run_analysis_pipeline
+from app.database import init_db_tables
+from app.scheduler import start_scheduler, shutdown_scheduler
+from app.api.watchlist import router as watchlist_router
 import uvicorn
 
-app = FastAPI(title="Stock Technical Analysis API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db_tables()
+    start_scheduler()
+    yield
+    shutdown_scheduler()
 
-# Enable CORS for React frontend (Vite defaults to port 5173)
+app = FastAPI(
+    title="Stock Technical Analysis API", 
+    version="1.0.0",
+    lifespan=lifespan
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In development, allow all. Or adjust to ["http://localhost:5173", "http://localhost:3000"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(watchlist_router)
 
 @app.get("/api/v1/health")
 async def health_check():
@@ -55,7 +71,7 @@ async def get_analysis(symbol: str, timeframe: str = Query("1d", regex="^(1d|int
                 detail=f"No data returned for symbol '{symbol}' with timeframe '{timeframe}'"
             )
             
-        # Intraday 4H candles from PSX only cover the current session (~2 bars),
+        # Intraday 15-minute candles from PSX only cover the current session,
         # so use a lower bar minimum than daily EOD analysis.
         min_bars = 2 if timeframe == 'int' else 20
         analysis_result = run_analysis_pipeline(df, min_bars=min_bars)
