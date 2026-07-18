@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface StockInfo {
   symbol: string;
@@ -38,23 +38,42 @@ interface WatchlistDashboardProps {
   onSelectSymbol: (symbol: string) => void;
 }
 
+/** Safely render log messages that may contain only <b> tags from the backend. */
+function renderSafeMessage(message: string): React.ReactNode {
+  const parts = message.split(/(<\/?b>)/gi);
+  let bold = false;
+  return parts.map((part, i) => {
+    if (part.toLowerCase() === '<b>') { bold = true; return null; }
+    if (part.toLowerCase() === '</b>') { bold = false; return null; }
+    return bold ? <b key={i}>{part}</b> : <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
+
 export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, onSelectSymbol }) => {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [logs, setLogs] = useState<AlertLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Search input for adding a stock
   const [searchVal, setSearchVal] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
 
-  // Edit threshold modal states
   const [editingItem, setEditingItem] = useState<WatchlistItem | null>(null);
   const [costInput, setCostInput] = useState('');
   const [slInput, setSlInput] = useState('');
   const [tpInput, setTpInput] = useState('');
   const [alertOnSignal, setAlertOnSignal] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  // Symbol awaiting delete confirmation
+  const [confirmDeleteSymbol, setConfirmDeleteSymbol] = useState<string | null>(null);
+
+  // Refs for focus management
+  const editTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const editModalRef = useRef<HTMLDivElement | null>(null);
+  const confirmModalRef = useRef<HTMLDivElement | null>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const fetchWatchlist = async () => {
     try {
@@ -88,13 +107,40 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
 
   useEffect(() => {
     loadData();
-    // Refresh data every 60 seconds
     const interval = setInterval(() => {
       fetchWatchlist();
       fetchLogs();
     }, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Close modals on Escape
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (editingItem) closeEditModal();
+        else if (confirmDeleteSymbol) cancelDelete();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [editingItem, confirmDeleteSymbol]);
+
+  // Move focus into edit modal when it opens
+  useEffect(() => {
+    if (editingItem && editModalRef.current) {
+      const first = editModalRef.current.querySelector<HTMLElement>('input, button');
+      first?.focus();
+    }
+  }, [editingItem]);
+
+  // Move focus into confirm modal when it opens
+  useEffect(() => {
+    if (confirmDeleteSymbol && confirmModalRef.current) {
+      const cancelBtn = confirmModalRef.current.querySelector<HTMLElement>('button');
+      cancelBtn?.focus();
+    }
+  }, [confirmDeleteSymbol]);
 
   const handleAddSymbol = async (symbol: string) => {
     try {
@@ -115,8 +161,21 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
     }
   };
 
-  const handleDeleteSymbol = async (symbol: string) => {
-    if (!window.confirm(`Are you sure you want to stop tracking ${symbol}?`)) return;
+  const handleDeleteSymbol = (symbol: string, trigger: HTMLButtonElement) => {
+    deleteTriggerRef.current = trigger;
+    setConfirmDeleteSymbol(symbol);
+  };
+
+  const cancelDelete = () => {
+    setConfirmDeleteSymbol(null);
+    deleteTriggerRef.current?.focus();
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmDeleteSymbol) return;
+    const symbol = confirmDeleteSymbol;
+    setConfirmDeleteSymbol(null);
+    deleteTriggerRef.current?.focus();
     try {
       const res = await fetch(`http://localhost:8000/api/v1/watchlist/${symbol}`, {
         method: 'DELETE'
@@ -128,22 +187,27 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
     }
   };
 
-  const openEditModal = (item: WatchlistItem) => {
+  const openEditModal = (item: WatchlistItem, trigger: HTMLButtonElement) => {
+    editTriggerRef.current = trigger;
     setEditingItem(item);
     setCostInput(item.purchase_price != null ? item.purchase_price.toString() : '');
     setSlInput(item.is_custom_stop_loss && item.stop_loss != null ? item.stop_loss.toString() : '');
     setTpInput(item.is_custom_target && item.target_price != null ? item.target_price.toString() : '');
     setAlertOnSignal(item.alert_on_signal);
+    setModalError(null);
   };
 
   const closeEditModal = () => {
     setEditingItem(null);
+    setModalError(null);
+    editTriggerRef.current?.focus();
   };
 
-  const handleUpdateItem = async (e: React.FormEvent) => {
+  const handleUpdateItem = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!editingItem) return;
     setUpdating(true);
+    setModalError(null);
     try {
       const payload = {
         purchase_price: costInput.trim() !== '' ? parseFloat(costInput) : null,
@@ -162,7 +226,7 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
       closeEditModal();
       await fetchWatchlist();
     } catch (err: any) {
-      alert(err.message || 'Failed to update item');
+      setModalError(err.message || 'Failed to update item');
     } finally {
       setUpdating(false);
     }
@@ -196,43 +260,52 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
     <div className="grid grid-cols-12 gap-6 w-full relative">
       {/* Top Banner Alert / Error */}
       {error && (
-        <div className="col-span-12 bg-error/10 border border-error/25 text-error rounded-xl p-4 flex items-center justify-between">
+        <div
+          role="alert"
+          className="col-span-12 bg-error/10 border border-error/25 text-error rounded-xl p-4 flex items-center justify-between"
+        >
           <div className="flex items-center gap-2 text-xs font-bold">
-            <span className="material-symbols-outlined text-[18px]">error</span>
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">error</span>
             <span>{error}</span>
           </div>
-          <button onClick={() => setError(null)} className="text-error/70 hover:text-error border-none bg-transparent cursor-pointer">
-            <span className="material-symbols-outlined text-[16px]">close</span>
+          <button
+            onClick={() => setError(null)}
+            aria-label="Dismiss error"
+            className="text-error/70 hover:text-error border-none bg-transparent cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">close</span>
           </button>
         </div>
       )}
 
       {/* Main Watchlist Table Column */}
-      <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
-        <div className="glass-panel p-5 flex flex-col gap-4">
+      <div style={{paddingTop:'10px'}} className="col-span-12 lg:col-span-8 flex flex-col gap-6">
+        <div style= {{padding:'10px 10px 10px 10px'}} className="glass-panel p-5 flex flex-col gap-4">
           <div className="flex justify-between items-center shrink-0">
             <div>
               <h2 className="text-base font-extrabold text-primary uppercase">My Watchlist</h2>
               <p className="text-[10px] text-on-surface-variant font-bold tracking-wider uppercase">Stocks you are tracking for signals & target levels</p>
             </div>
-            <button 
+            <button
               onClick={loadData}
               disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container border border-outline-variant text-[10px] font-bold uppercase rounded-lg hover:bg-surface-container-high cursor-pointer transition-colors"
+              aria-label="Refresh watchlist"
+              aria-busy={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container border border-outline-variant text-[10px] font-bold uppercase rounded-lg hover:bg-surface-container-high cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <span className={`material-symbols-outlined text-[14px] ${loading ? 'animate-spin' : ''}`}>sync</span>
+              <span className={`material-symbols-outlined text-[14px] ${loading ? 'animate-spin' : ''}`} aria-hidden="true">sync</span>
               Refresh
             </button>
           </div>
 
           {loading && watchlist.length === 0 ? (
-            <div className="p-12 flex flex-col items-center justify-center min-h-[300px]">
-              <span className="material-symbols-outlined text-primary text-[32px] animate-spin mb-3">sync</span>
+            <div className="p-12 flex flex-col items-center justify-center min-h-[300px]" role="status" aria-label="Loading watchlist">
+              <span className="material-symbols-outlined text-primary text-[32px] animate-spin mb-3" aria-hidden="true">sync</span>
               <p className="text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">Syncing Watchlist Indicators...</p>
             </div>
           ) : watchlist.length === 0 ? (
             <div className="p-12 flex flex-col items-center justify-center min-h-[300px] border border-dashed border-outline-variant rounded-xl text-center">
-              <span className="material-symbols-outlined text-on-surface-variant text-[44px] mb-3">playlist_add</span>
+              <span className="material-symbols-outlined text-on-surface-variant text-[44px] mb-3" aria-hidden="true">playlist_add</span>
               <h3 className="text-xs font-bold text-on-surface">Your watchlist is empty</h3>
               <p className="text-on-surface-variant text-[10px] mt-1 max-w-[280px]">Add stock symbols from the panel on the right to start tracking technical signals and price alerts.</p>
             </div>
@@ -241,13 +314,13 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-outline-variant text-on-surface-variant font-bold text-[10px] uppercase tracking-wider">
-                    <th className="pb-3 pl-2">Asset</th>
-                    <th className="pb-3 text-right">Last Price</th>
-                    <th className="pb-3 text-center">Verdict</th>
-                    <th className="pb-3 text-right">Avg Cost</th>
-                    <th className="pb-3 text-right">P&L %</th>
-                    <th className="pb-3 text-center">Limits</th>
-                    <th className="pb-3 text-center pr-2">Actions</th>
+                    <th className="pb-3 pl-2" scope="col">Asset</th>
+                    <th className="pb-3 text-right" scope="col">Last Price</th>
+                    <th className="pb-3 text-center" scope="col">Verdict</th>
+                    <th className="pb-3 text-right" scope="col">Avg Cost</th>
+                    <th className="pb-3 text-right" scope="col">P&L %</th>
+                    <th className="pb-3 text-center" scope="col">Limits</th>
+                    <th className="pb-3 text-center pr-2" scope="col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/50 tabular-nums">
@@ -262,7 +335,7 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                           <div className="flex flex-col">
                             <button
                               onClick={() => onSelectSymbol(item.symbol)}
-                              className="text-left font-extrabold text-primary hover:text-secondary bg-transparent border-none p-0 cursor-pointer text-xs"
+                              className="text-left font-extrabold text-primary hover:text-secondary bg-transparent border-none p-0 cursor-pointer text-xs focus:outline-none focus:underline"
                             >
                               {item.symbol}
                             </button>
@@ -295,13 +368,13 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                           <div className="flex flex-col items-center gap-0.5 text-[9px] font-bold text-on-surface-variant">
                             {item.stop_loss != null && (
                               <span className="text-error flex items-center gap-0.5" title={item.is_custom_stop_loss ? "Custom Stop Loss" : "Auto Stop Loss from Dashboard"}>
-                                <span className="material-symbols-outlined text-[10px]">trending_down</span>
+                                <span className="material-symbols-outlined text-[10px]" aria-hidden="true">trending_down</span>
                                 SL: {item.stop_loss.toFixed(1)} {!item.is_custom_stop_loss && <span className="opacity-60 font-semibold text-[8px]">(auto)</span>}
                               </span>
                             )}
                             {item.target_price != null && (
                               <span className="text-secondary flex items-center gap-0.5" title={item.is_custom_target ? "Custom Target Price" : "Auto Target Price from Dashboard"}>
-                                <span className="material-symbols-outlined text-[10px]">trending_up</span>
+                                <span className="material-symbols-outlined text-[10px]" aria-hidden="true">trending_up</span>
                                 TP: {item.target_price.toFixed(1)} {!item.is_custom_target && <span className="opacity-60 font-semibold text-[8px]">(auto)</span>}
                               </span>
                             )}
@@ -313,18 +386,18 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                         <td className="py-3.5 text-center pr-2">
                           <div className="flex items-center justify-center gap-1">
                             <button
-                              onClick={() => openEditModal(item)}
-                              title="Set price alerts & cost"
-                              className="w-7 h-7 flex items-center justify-center text-primary-fixed-dim hover:bg-surface-container-high rounded-full border-none bg-transparent cursor-pointer transition-colors"
+                              onClick={(e) => openEditModal(item, e.currentTarget)}
+                              aria-label={`Configure alerts for ${item.symbol}`}
+                              className="w-9 h-9 flex items-center justify-center text-primary-fixed-dim hover:bg-surface-container-high rounded-full border-none bg-transparent cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
                             >
-                              <span className="material-symbols-outlined text-[16px]">edit_notifications</span>
+                              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">edit_notifications</span>
                             </button>
                             <button
-                              onClick={() => handleDeleteSymbol(item.symbol)}
-                              title="Delete from watchlist"
-                              className="w-7 h-7 flex items-center justify-center text-error hover:bg-error-container/20 rounded-full border-none bg-transparent cursor-pointer transition-colors"
+                              onClick={(e) => handleDeleteSymbol(item.symbol, e.currentTarget)}
+                              aria-label={`Remove ${item.symbol} from watchlist`}
+                              className="w-9 h-9 flex items-center justify-center text-error hover:bg-error-container/20 rounded-full border-none bg-transparent cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-error/50"
                             >
-                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">delete</span>
                             </button>
                           </div>
                         </td>
@@ -339,15 +412,17 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
       </div>
 
       {/* Right Column Panels */}
-      <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
+      <div style= {{paddingTop:'10px'}}  className="col-span-12 lg:col-span-4 flex flex-col gap-6">
         {/* Add Ticker Card */}
-        <section className="glass-panel p-5 flex flex-col gap-3">
+        <section style={{padding: '10px 10px 10px 10px'}} className="glass-panel p-5 flex flex-col gap-3">
           <h3 className="text-xs font-extrabold text-primary uppercase">Add Stock Ticker</h3>
           <p className="text-[10px] text-on-surface-variant font-medium leading-relaxed">Enter a symbol or select from exchange suggestions below.</p>
-          
-          <div className="relative w-full">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[16px]">add</span>
+      
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[16px]" aria-hidden="true">add</span>
+            <label htmlFor="ticker-search" className="sr-only">Search stock ticker</label>
             <input
+              id="ticker-search"
               style={{ padding: '8px 8px 8px 32px' }}
               className="w-full bg-surface-container border border-outline-variant rounded-xl text-xs focus:outline-none focus:border-primary transition-colors p-[8px]"
               placeholder="Search ticker (e.g. HUBC, LUCK)"
@@ -358,14 +433,17 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
               onBlur={() => {
                 setTimeout(() => setSearchFocused(false), 200);
               }}
+              autoComplete="off"
+              aria-autocomplete="list"
+              aria-expanded={searchFocused}
             />
 
             {/* Auto-suggest dropdown */}
             {searchFocused && (
               (() => {
                 const results = searchVal.trim() !== ''
-                  ? stocks.filter(s => 
-                      s.symbol.toUpperCase().includes(searchVal.toUpperCase()) || 
+                  ? stocks.filter(s =>
+                      s.symbol.toUpperCase().includes(searchVal.toUpperCase()) ||
                       s.name.toUpperCase().includes(searchVal.toUpperCase())
                     )
                   : stocks.slice(0, 10);
@@ -374,21 +452,26 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                 const filteredResults = results.filter(s => !activeSymbols.has(s.symbol));
 
                 return filteredResults.length > 0 ? (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar p-1 flex flex-col gap-0.5">
+                  <ul
+                    role="listbox"
+                    aria-label="Stock suggestions"
+                    className="absolute top-full left-0 right-0 mt-1 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar p-1 flex flex-col gap-0.5 list-none m-0"
+                  >
                     {filteredResults.map(stock => (
-                      <button
-                        key={stock.symbol}
-                        onMouseDown={() => handleAddSymbol(stock.symbol)}
-                        className="w-full text-left px-3 py-1.5 hover:bg-surface-container rounded-lg transition-colors cursor-pointer border-none bg-transparent flex items-center justify-between group"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-xs text-primary">{stock.symbol}</span>
-                          <span className="text-[10px] text-on-surface-variant truncate max-w-[150px]">{stock.name}</span>
-                        </div>
-                        <span className="text-[9px] bg-secondary/15 text-secondary px-1 py-0.5 rounded font-bold uppercase">Add</span>
-                      </button>
+                      <li key={stock.symbol} role="option" aria-selected="false">
+                        <button
+                          onMouseDown={() => handleAddSymbol(stock.symbol)}
+                          className="w-full text-left px-3 py-1.5 hover:bg-surface-container rounded-lg transition-colors cursor-pointer border-none bg-transparent flex items-center justify-between group"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-primary">{stock.symbol}</span>
+                            <span className="text-[10px] text-on-surface-variant truncate max-w-[150px]">{stock.name}</span>
+                          </div>
+                          <span className="text-[9px] bg-secondary/15 text-secondary px-1 py-0.5 rounded font-bold uppercase" aria-hidden="true">Add</span>
+                        </button>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 ) : null;
               })()
             )}
@@ -396,16 +479,16 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
         </section>
 
         {/* Alerts Log Panel */}
-        <section className="glass-panel p-5 flex flex-col gap-4">
+        <section style={{padding: '10px 10px 10px 10px'}} className="glass-panel p-5 flex flex-col gap-4">
           <div className="flex justify-between items-center border-b border-outline-variant pb-2 shrink-0">
             <h3 className="text-xs font-extrabold text-primary uppercase flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[16px] text-primary">notifications_active</span>
+              <span className="material-symbols-outlined text-[16px] text-primary" aria-hidden="true">notifications_active</span>
               Recent Triggered Alerts
             </h3>
-            <span className="text-[9px] bg-secondary/15 text-secondary px-1.5 py-0.5 rounded font-bold">LIVE</span>
+            <span style={{padding: '5px 5px 5px 5px'}} className="text-[9px] bg-secondary/15 text-secondary px-1.5 py-0.5 rounded font-bold" aria-label="Live data">LIVE</span>
           </div>
 
-          <div className="flex flex-col gap-2.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+          <div className="flex flex-col gap-2.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1" role="log" aria-live="polite" aria-label="Alert history">
             {logs.length === 0 ? (
               <p className="text-on-surface-variant italic text-center py-6 text-[10px]">No alerts triggered yet.</p>
             ) : (
@@ -413,7 +496,7 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                 const date = new Date(log.created_at);
                 const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-                
+
                 let icon = 'info';
                 let iconColor = 'text-primary-fixed-dim';
                 if (log.alert_type === 'STOP_LOSS') {
@@ -426,7 +509,7 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
 
                 return (
                   <div key={log.id} className="flex gap-2.5 p-2.5 bg-surface-container border border-outline-variant rounded-xl items-start">
-                    <span className={`material-symbols-outlined text-[18px] ${iconColor} mt-0.5 shrink-0`}>
+                    <span className={`material-symbols-outlined text-[18px] ${iconColor} mt-0.5 shrink-0`} aria-hidden="true">
                       {icon}
                     </span>
                     <div className="flex flex-col gap-0.5">
@@ -434,11 +517,9 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                         <span className="font-extrabold text-primary text-[11px]">{log.symbol}</span>
                         <span className="text-[8px] text-on-surface-variant font-bold uppercase">{log.alert_type.replace('_', ' ')}</span>
                       </div>
-                      {/* Using dangerouslySetInnerHTML because backend builds message with <b> tags */}
-                      <p 
-                        className="text-[10px] text-on-surface-variant leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: log.message }}
-                      />
+                      <p className="text-[10px] text-on-surface-variant leading-relaxed">
+                        {renderSafeMessage(log.message)}
+                      </p>
                       <span className="text-[8px] text-on-surface-variant/70 font-semibold mt-1">
                         {dateStr} at {timeStr} • Price: {log.triggered_price.toFixed(2)}
                       </span>
@@ -451,24 +532,86 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
         </section>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteSymbol && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) cancelDelete(); }}
+        >
+          <div
+            ref={confirmModalRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="confirm-delete-title"
+            aria-describedby="confirm-delete-desc"
+            className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-6 shadow-2xl max-w-sm w-full flex flex-col gap-4"
+          >
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-error text-[24px] mt-0.5 shrink-0" aria-hidden="true">delete_forever</span>
+              <div className="flex flex-col gap-1">
+                <h3 id="confirm-delete-title" className="text-sm font-extrabold text-on-surface">Remove {confirmDeleteSymbol}?</h3>
+                <p id="confirm-delete-desc" className="text-[11px] text-on-surface-variant leading-relaxed">
+                  This will stop tracking <strong>{confirmDeleteSymbol}</strong> and remove it from your watchlist. Your alert history is not affected.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={cancelDelete}
+                className="px-4 py-2 border border-outline-variant text-[10px] font-bold uppercase rounded-lg hover:bg-surface-container cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-error text-on-error text-[10px] font-bold uppercase rounded-lg hover:opacity-90 active:scale-95 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-error/50"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Thresholds Modal */}
       {editingItem && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-6 shadow-2xl max-w-md w-full animate-none flex flex-col gap-4">
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) closeEditModal(); }}
+        >
+          <div
+            ref={editModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-modal-title"
+            className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-6 shadow-2xl max-w-md w-full flex flex-col gap-4"
+          >
             <div className="flex justify-between items-center border-b border-outline-variant pb-2">
               <div>
-                <h3 className="text-sm font-extrabold text-primary uppercase">Configure Alerts: {editingItem.symbol}</h3>
+                <h3 id="edit-modal-title" className="text-sm font-extrabold text-primary uppercase">Configure Alerts: {editingItem.symbol}</h3>
                 <p className="text-[10px] text-on-surface-variant font-medium">Set purchase cost and threshold alert prices.</p>
               </div>
-              <button 
+              <button
+                type="button"
                 onClick={closeEditModal}
-                className="w-7 h-7 flex items-center justify-center rounded-full bg-surface-container border-none text-on-surface-variant hover:bg-surface-container-high cursor-pointer"
+                aria-label="Close configure alerts dialog"
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-container border-none text-on-surface-variant hover:bg-surface-container-high cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
-                <span className="material-symbols-outlined text-[16px]">close</span>
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleUpdateItem} className="flex flex-col gap-4">
+            {/* Inline modal error */}
+            {modalError && (
+              <div role="alert" className="flex items-center gap-2 bg-error/10 border border-error/25 text-error rounded-xl p-3 text-[11px] font-bold">
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">error</span>
+                {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateItem} className="flex flex-col gap-4" noValidate>
               <div className="flex flex-col gap-1">
                 <label className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-wider" htmlFor="purchase-price">
                   Average Purchase Cost (PKR)
@@ -477,60 +620,63 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                   id="purchase-price"
                   type="number"
                   step="0.01"
+                  min="0"
                   value={costInput}
                   onChange={(e) => setCostInput(e.target.value)}
                   placeholder="Enter purchase cost per share"
-                  className="bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                  className="bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-wider flex items-center gap-1" htmlFor="stop-loss-price">
-                    <span className="material-symbols-outlined text-error text-[12px]">trending_down</span>
+                    <span className="material-symbols-outlined text-error text-[12px]" aria-hidden="true">trending_down</span>
                     Stop Loss (PKR)
                   </label>
                   <input
                     id="stop-loss-price"
                     type="number"
                     step="0.01"
+                    min="0"
                     value={slInput}
                     onChange={(e) => setSlInput(e.target.value)}
                     placeholder={editingItem.is_custom_stop_loss || editingItem.stop_loss == null ? "Alert below price" : `SL: ${editingItem.stop_loss.toFixed(2)} (auto)`}
-                    className="bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                    className="bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
                   <label className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-wider flex items-center gap-1" htmlFor="target-price-input">
-                    <span className="material-symbols-outlined text-secondary text-[12px]">trending_up</span>
+                    <span className="material-symbols-outlined text-secondary text-[12px]" aria-hidden="true">trending_up</span>
                     Target Price (PKR)
                   </label>
                   <input
                     id="target-price-input"
                     type="number"
                     step="0.01"
+                    min="0"
                     value={tpInput}
                     onChange={(e) => setTpInput(e.target.value)}
                     placeholder={editingItem.is_custom_target || editingItem.target_price == null ? "Alert above price" : `TP: ${editingItem.target_price.toFixed(2)} (auto)`}
-                    className="bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                    className="bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
                   />
                 </div>
               </div>
 
               <div className="flex items-center justify-between bg-surface-container/30 border border-outline-variant/60 p-3 rounded-xl">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px] font-bold text-on-surface">Technical Signal Alerts</span>
+                  <span className="text-[10px] font-bold text-on-surface" id="alert-on-signal-label">Technical Signal Alerts</span>
                   <span className="text-[8px] text-on-surface-variant">Notify when indicators flip (e.g. BUY ➔ SELL)</span>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={alertOnSignal} 
-                    onChange={(e) => setAlertOnSignal(e.target.checked)} 
+                <label className="relative inline-flex items-center cursor-pointer" aria-labelledby="alert-on-signal-label">
+                  <input
+                    type="checkbox"
+                    checked={alertOnSignal}
+                    onChange={(e) => setAlertOnSignal(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-secondary"></div>
+                  <div className="w-9 h-5 bg-outline-variant peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-secondary"></div>
                 </label>
               </div>
 
@@ -538,16 +684,17 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                 <button
                   type="button"
                   onClick={closeEditModal}
-                  className="px-4 py-2 border border-outline-variant text-[10px] font-bold uppercase rounded-lg hover:bg-surface-container cursor-pointer transition-colors"
+                  className="px-4 py-2 border border-outline-variant text-[10px] font-bold uppercase rounded-lg hover:bg-surface-container cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-4 py-2 bg-primary text-on-primary text-[10px] font-bold uppercase rounded-lg hover:opacity-90 active:scale-95 cursor-pointer transition-all flex items-center gap-1.5"
+                  aria-busy={updating}
+                  className="px-4 py-2 bg-primary text-on-primary text-[10px] font-bold uppercase rounded-lg hover:opacity-90 active:scale-95 cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary/50"
                 >
-                  {updating && <span className="material-symbols-outlined text-[14px] animate-spin">sync</span>}
+                  {updating && <span className="material-symbols-outlined text-[14px] animate-spin" aria-hidden="true">sync</span>}
                   Save Changes
                 </button>
               </div>
