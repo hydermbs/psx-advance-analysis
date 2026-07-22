@@ -73,3 +73,5 @@ Thumbs.db
 
 # ───── Misc ─────
 .omc/
+
+backend/watchlist.db

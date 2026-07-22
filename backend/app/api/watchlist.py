@@ -14,12 +14,14 @@ router = APIRouter(prefix="/api/v1/watchlist", tags=["watchlist"])
 class WatchlistCreate(BaseModel):
     symbol: str
     purchase_price: Optional[float] = None
+    quantity: Optional[int] = None
     target_price: Optional[float] = None
     stop_loss: Optional[float] = None
     alert_on_signal: bool = True
 
 class WatchlistUpdate(BaseModel):
     purchase_price: Optional[float] = None
+    quantity: Optional[int] = None
     target_price: Optional[float] = None
     stop_loss: Optional[float] = None
     alert_on_signal: Optional[bool] = None
@@ -30,6 +32,7 @@ async def fetch_item_details(item: WatchlistItem):
         "id": item.id,
         "symbol": symbol,
         "purchase_price": item.purchase_price,
+        "quantity": item.quantity,
         "target_price": item.target_price,
         "stop_loss": item.stop_loss,
         "is_custom_target": item.target_price is not None,
@@ -121,6 +124,7 @@ async def add_to_watchlist(payload: WatchlistCreate, db: Session = Depends(get_d
     new_item = WatchlistItem(
         symbol=payload.symbol.upper(),
         purchase_price=payload.purchase_price,
+        quantity=payload.quantity,
         target_price=payload.target_price,
         stop_loss=payload.stop_loss,
         alert_on_signal=payload.alert_on_signal
@@ -142,14 +146,17 @@ async def update_watchlist_item(symbol: str, payload: WatchlistUpdate, db: Sessi
             detail=f"Watchlist item with symbol '{symbol}' not found."
         )
         
-    if payload.purchase_price is not None:
-        item.purchase_price = payload.purchase_price
-    if payload.target_price is not None:
-        item.target_price = payload.target_price
-    if payload.stop_loss is not None:
-        item.stop_loss = payload.stop_loss
-    if payload.alert_on_signal is not None:
-        item.alert_on_signal = payload.alert_on_signal
+    update_data = payload.dict(exclude_unset=True)
+    if "purchase_price" in update_data:
+        item.purchase_price = update_data["purchase_price"]
+    if "quantity" in update_data:
+        item.quantity = update_data["quantity"]
+    if "target_price" in update_data:
+        item.target_price = update_data["target_price"]
+    if "stop_loss" in update_data:
+        item.stop_loss = update_data["stop_loss"]
+    if "alert_on_signal" in update_data:
+        item.alert_on_signal = update_data["alert_on_signal"]
         
     item.updated_at = datetime.now(timezone.utc)
     

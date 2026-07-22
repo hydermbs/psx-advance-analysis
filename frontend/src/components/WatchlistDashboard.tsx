@@ -12,6 +12,7 @@ interface WatchlistItem {
   id: number;
   symbol: string;
   purchase_price: number | null;
+  quantity: number | null;
   target_price: number | null;
   stop_loss: number | null;
   is_custom_target: boolean;
@@ -60,6 +61,7 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
 
   const [editingItem, setEditingItem] = useState<WatchlistItem | null>(null);
   const [costInput, setCostInput] = useState('');
+  const [quantityInput, setQuantityInput] = useState('');
   const [slInput, setSlInput] = useState('');
   const [tpInput, setTpInput] = useState('');
   const [alertOnSignal, setAlertOnSignal] = useState(true);
@@ -191,6 +193,7 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
     editTriggerRef.current = trigger;
     setEditingItem(item);
     setCostInput(item.purchase_price != null ? item.purchase_price.toString() : '');
+    setQuantityInput(item.quantity != null ? item.quantity.toString() : '');
     setSlInput(item.is_custom_stop_loss && item.stop_loss != null ? item.stop_loss.toString() : '');
     setTpInput(item.is_custom_target && item.target_price != null ? item.target_price.toString() : '');
     setAlertOnSignal(item.alert_on_signal);
@@ -199,6 +202,7 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
 
   const closeEditModal = () => {
     setEditingItem(null);
+    setQuantityInput('');
     setModalError(null);
     editTriggerRef.current?.focus();
   };
@@ -211,6 +215,7 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
     try {
       const payload = {
         purchase_price: costInput.trim() !== '' ? parseFloat(costInput) : null,
+        quantity: quantityInput.trim() !== '' ? parseInt(quantityInput, 10) : null,
         stop_loss: slInput.trim() !== '' ? parseFloat(slInput) : null,
         target_price: tpInput.trim() !== '' ? parseFloat(tpInput) : null,
         alert_on_signal: alertOnSignal
@@ -256,6 +261,23 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
     );
   };
 
+  // Summing up values for the top summary panel
+  const summary = watchlist.reduce(
+    (acc, item) => {
+      if (item.purchase_price != null && item.quantity != null && item.quantity > 0) {
+        const invested = item.purchase_price * item.quantity;
+        const currentVal = (item.current_price ?? item.purchase_price) * item.quantity;
+        acc.totalInvested += invested;
+        acc.currentValue += currentVal;
+      }
+      return acc;
+    },
+    { totalInvested: 0, currentValue: 0 }
+  );
+
+  const totalPnL = summary.currentValue - summary.totalInvested;
+  const totalPnLPercent = summary.totalInvested > 0 ? (totalPnL / summary.totalInvested) * 100 : 0;
+
   return (
     <div className="grid grid-cols-12 gap-6 w-full relative">
       {/* Top Banner Alert / Error */}
@@ -275,6 +297,55 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
           >
             <span className="material-symbols-outlined text-[16px]" aria-hidden="true">close</span>
           </button>
+        </div>
+      )}
+
+      {/* Top Summary Cards */}
+      {watchlist.some(item => item.purchase_price != null && item.quantity != null && item.quantity > 0) && (
+        <div style={{padding:'10px 10px 10px 10px'}} className="col-span-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Card 1: Total Invested */}
+          <div style={{padding:'10px 10px 10px 10px'}} className="glass-panel p-4 flex flex-col justify-between">
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Total Invested</span>
+                <span className="text-lg font-black text-on-surface tabular-nums">
+                  PKR {summary.totalInvested.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <span className="material-symbols-outlined text-[20px] text-primary bg-surface-container p-2 rounded-lg" aria-hidden="true">payments</span>
+            </div>
+          </div>
+
+          {/* Card 2: Current Value */}
+          <div style={{padding:'10px 10px 10px 10px'}} className="glass-panel p-4 flex flex-col justify-between">
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Current Value</span>
+                <span className="text-lg font-black text-on-surface tabular-nums">
+                  PKR {summary.currentValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <span className="material-symbols-outlined text-[20px] text-primary bg-surface-container p-2 rounded-lg" aria-hidden="true">monitoring</span>
+            </div>
+          </div>
+
+          {/* Card 3: Total Profit & Loss */}
+          <div style={{padding:'10px 10px 10px 10px'}} className={`glass-panel p-4 flex flex-col justify-between border-l-4 ${totalPnL >= 0 ? 'border-l-secondary' : 'border-l-error'}`}>
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Total Profit / Loss</span>
+                <span className={`text-lg font-black tabular-nums ${totalPnL >= 0 ? 'text-secondary' : 'text-error'}`}>
+                  {totalPnL >= 0 ? '+' : ''}PKR {totalPnL.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className={`text-[10px] font-extrabold mt-0.5 flex items-center gap-0.5 ${totalPnL >= 0 ? 'text-secondary' : 'text-error'}`}>
+                  {totalPnL >= 0 ? '▲' : '▼'} {totalPnLPercent.toFixed(2)}%
+                </span>
+              </div>
+              <span className={`material-symbols-outlined text-[20px] p-2 rounded-lg ${totalPnL >= 0 ? 'text-secondary bg-secondary/10' : 'text-error bg-error/10'}`} aria-hidden="true">
+                {totalPnL >= 0 ? 'trending_up' : 'trending_down'}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -318,7 +389,10 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                     <th className="pb-3 text-right" scope="col">Last Price</th>
                     <th className="pb-3 text-center" scope="col">Verdict</th>
                     <th className="pb-3 text-right" scope="col">Avg Cost</th>
+                    <th className="pb-3 text-right" scope="col">Qty</th>
+                    <th className="pb-3 text-right" scope="col">Invested</th>
                     <th className="pb-3 text-right" scope="col">P&L %</th>
+                    <th className="pb-3 text-right" scope="col">P&L Amount</th>
                     <th className="pb-3 text-center" scope="col">Limits</th>
                     <th className="pb-3 text-center pr-2" scope="col">Actions</th>
                   </tr>
@@ -328,6 +402,11 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                     const price = item.current_price;
                     const changePercent = item.pnl_percent;
                     const isPositive = changePercent != null && changePercent >= 0;
+
+                    const quantity = item.quantity;
+                    const invested = (item.purchase_price != null && quantity != null) ? item.purchase_price * quantity : null;
+                    const pnlAmount = (price != null && item.purchase_price != null && quantity != null) ? (price - item.purchase_price) * quantity : null;
+                    const isPnLAmountPositive = pnlAmount != null && pnlAmount >= 0;
 
                     return (
                       <tr key={item.id} className="hover:bg-surface-container/30 transition-colors group">
@@ -357,11 +436,24 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
                         <td className="py-3.5 text-right font-medium text-on-surface-variant">
                           {item.purchase_price != null ? `PKR ${item.purchase_price.toFixed(2)}` : '—'}
                         </td>
+                        <td className="py-3.5 text-right font-medium text-on-surface-variant">
+                          {quantity != null ? quantity.toLocaleString('en-US') : '—'}
+                        </td>
+                        <td className="py-3.5 text-right font-medium text-on-surface-variant">
+                          {invested != null ? `PKR ${invested.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                        </td>
                         <td className={`py-3.5 text-right font-bold ${
                           changePercent == null ? 'text-on-surface-variant' : isPositive ? 'text-secondary' : 'text-error'
                         }`}>
                           {changePercent != null ? (
                             <span>{isPositive ? '+' : ''}{changePercent.toFixed(2)}%</span>
+                          ) : '—'}
+                        </td>
+                        <td className={`py-3.5 text-right font-bold ${
+                          pnlAmount == null ? 'text-on-surface-variant' : isPnLAmountPositive ? 'text-secondary' : 'text-error'
+                        }`}>
+                          {pnlAmount != null ? (
+                            <span>{isPnLAmountPositive ? '+' : ''}PKR {pnlAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           ) : '—'}
                         </td>
                         <td className="py-3.5 text-center">
@@ -612,20 +704,38 @@ export const WatchlistDashboard: React.FC<WatchlistDashboardProps> = ({ stocks, 
             )}
 
             <form onSubmit={handleUpdateItem} className="flex flex-col gap-4" noValidate>
-              <div className="flex flex-col gap-1">
-                <label className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-wider" htmlFor="purchase-price">
-                  Average Purchase Cost (PKR)
-                </label>
-                <input
-                  id="purchase-price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={costInput}
-                  onChange={(e) => setCostInput(e.target.value)}
-                  placeholder="Enter purchase cost per share"
-                  className="bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-wider" htmlFor="purchase-price">
+                    Average Purchase Cost (PKR)
+                  </label>
+                  <input
+                    id="purchase-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={costInput}
+                    onChange={(e) => setCostInput(e.target.value)}
+                    placeholder="E.g. 150.50"
+                    className="bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-wider" htmlFor="stock-quantity">
+                    Number of Stocks
+                  </label>
+                  <input
+                    id="stock-quantity"
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={quantityInput}
+                    onChange={(e) => setQuantityInput(e.target.value)}
+                    placeholder="E.g. 100"
+                    className="bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
