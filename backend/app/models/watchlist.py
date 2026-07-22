@@ -11,6 +11,7 @@ class WatchlistItem(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     symbol: str = Field(unique=True, index=True, nullable=False)
     purchase_price: Optional[float] = Field(default=None)
+    quantity: Optional[int] = Field(default=None)
     target_price: Optional[float] = Field(default=None)
     stop_loss: Optional[float] = Field(default=None)
     alert_on_signal: bool = Field(default=True)
@@ -29,3 +30,20 @@ class NotificationLog(SQLModel, table=True):
     message: str = Field(nullable=False)
     triggered_price: float = Field(nullable=False)
     created_at: datetime = Field(default_factory=utc_now)
+
+class DipAlert(SQLModel, table=True):
+    __tablename__: str = "dip_alerts"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: str = Field(index=True, nullable=False)
+    quantity: int = Field(nullable=False)
+    sell_price: float = Field(nullable=False)
+    target_type: str = Field(default="percentage")  # 'percentage', 'custom', or 'technical'
+    dip_percentage: Optional[float] = Field(default=None)
+    target_price: float = Field(nullable=False)
+    is_active: bool = Field(default=True, index=True)
+    is_triggered: bool = Field(default=False)
+    triggered_price: Optional[float] = Field(default=None)
+    triggered_at: Optional[datetime] = Field(default=None)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)

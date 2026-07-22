@@ -1,11 +1,16 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 from app.data.registry import get_data_adapter
 from app.analysis.pipeline import run_analysis_pipeline
 from app.database import init_db_tables
 from app.scheduler import start_scheduler, shutdown_scheduler
 from app.api.watchlist import router as watchlist_router
+from app.api.dip_alerts import router as dip_alerts_router
 import uvicorn
 
 @asynccontextmanager
@@ -30,6 +35,7 @@ app.add_middleware(
 )
 
 app.include_router(watchlist_router)
+app.include_router(dip_alerts_router)
 
 @app.get("/api/v1/health")
 async def health_check():

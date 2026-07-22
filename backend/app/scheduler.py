@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session, select
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.database import engine
-from app.models.watchlist import WatchlistItem, NotificationLog
+from app.models.watchlist import WatchlistItem, NotificationLog, DipAlert
 from app.data.registry import get_data_adapter
 from app.analysis.pipeline import run_analysis_pipeline
 from app.notifications.manager import notification_manager
@@ -146,12 +146,87 @@ async def check_watchlist_prices():
             except Exception as e:
                 logger.error(f"Error checking price for symbol {symbol} in background scheduler: {str(e)}")
 
+async def check_dip_alerts():
+    logger.info("Executing background dip alerts check...")
+    
+    with Session(engine) as session:
+        statement = select(DipAlert).where(DipAlert.is_active == True)
+        alerts = session.exec(statement).all()
+        
+        if not alerts:
+            logger.info("No active dip alerts to monitor.")
+            return
+            
+        adapter = get_data_adapter()
+        
+        for alert in alerts:
+            symbol = alert.symbol
+            try:
+                current_price = None
+                df = await adapter.get_ohlcv(symbol, "1d")
+                if not df.empty:
+                    current_price = float(df["close"].iloc[-1])
+                
+                try:
+                    df_int = await adapter.get_ohlcv(symbol, "int")
+                    if not df_int.empty:
+                        current_price = float(df_int["close"].iloc[-1])
+                except Exception:
+                    pass
+                    
+                if current_price is None:
+                    logger.warning(f"Could not fetch current price for {symbol} in dip check.")
+                    continue
+                    
+                if current_price <= alert.target_price:
+                    total_sell_value = alert.quantity * alert.sell_price
+                    reentry_cost = alert.quantity * current_price
+                    savings = total_sell_value - reentry_cost
+                    percentage_drop = ((alert.sell_price - current_price) / alert.sell_price) * 100.0
+                    
+                    title = f"📉 DIP RE-ENTRY TRIGGERED: {symbol}"
+                    msg = (
+                        f"You sold {alert.quantity} shares of <b>{symbol}</b> at PKR {alert.sell_price:.2f}.\n"
+                        f"Price has dipped to <b>PKR {current_price:.2f}</b> (Target: PKR {alert.target_price:.2f}, -{percentage_drop:.1f}%).\n"
+                        f"Re-entry Cost: PKR {reentry_cost:.2f} | <b>Total Savings: PKR {savings:.2f}</b>!"
+                    )
+                    
+                    alert.is_active = False
+                    alert.is_triggered = True
+                    alert.triggered_price = current_price
+                    alert.triggered_at = datetime.now(timezone.utc)
+                    alert.updated_at = datetime.now(timezone.utc)
+                    session.add(alert)
+                    
+                    log = NotificationLog(
+                        symbol=symbol,
+                        alert_type="DIP_ALERT",
+                        message=msg,
+                        triggered_price=current_price
+                    )
+                    session.add(log)
+                    
+                    await notification_manager.dispatch(symbol, title, msg)
+                    logger.info(f"Dip alert triggered for {symbol}: price={current_price}, target={alert.target_price}")
+                    
+            except Exception as e:
+                logger.error(f"Error checking dip alert for symbol {symbol}: {str(e)}")
+                
+        session.commit()
+
 def start_scheduler():
     scheduler.add_job(
         check_watchlist_prices,
         "interval",
         minutes=15,
         id="watchlist_price_check",
+        replace_existing=True
+    )
+    scheduler.add_job(
+        check_dip_alerts,
+        "interval",
+        minutes=15,
+        id="dip_alerts_check",
         replace_existing=True
     )
     scheduler.start()

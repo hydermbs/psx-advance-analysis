@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChartContainer } from './components/ChartContainer';
 import { SignalDashboard } from './components/SignalDashboard';
 import { WatchlistDashboard } from './components/WatchlistDashboard';
+import { DipAlertsDashboard } from './components/DipAlertsDashboard';
 import './App.css';
 
 interface StockInfo {
@@ -42,7 +43,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   
   // Tabs navigation state
-  const [mainTab, setMainTab] = useState<'dashboard' | 'watchlist'>('dashboard');
+  const [mainTab, setMainTab] = useState<'dashboard' | 'watchlist' | 'dip-alerts'>('dashboard');
   
   // Bottom Panel active tab
   const [bottomTab, setBottomTab] = useState<'patterns' | 'structure' | 'risk'>('patterns');
@@ -254,6 +255,17 @@ function App() {
               >
                 Watchlist
               </button>
+              <button
+                style={{ padding: '10px 14px' }}
+                onClick={() => setMainTab('dip-alerts')}
+                className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer border-none bg-transparent ${
+                  mainTab === 'dip-alerts'
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                Dip Tracker
+              </button>
             </div>
 
             {/* Timeframe Toggles */}
@@ -298,6 +310,14 @@ function App() {
           <div className="max-w-[1440px] w-full mx-auto space-y-6">
             {mainTab === 'watchlist' ? (
               <WatchlistDashboard 
+                stocks={stocks} 
+                onSelectSymbol={(sym) => {
+                  setSelectedSymbol(sym);
+                  setMainTab('dashboard');
+                }}
+              />
+            ) : mainTab === 'dip-alerts' ? (
+              <DipAlertsDashboard 
                 stocks={stocks} 
                 onSelectSymbol={(sym) => {
                   setSelectedSymbol(sym);
