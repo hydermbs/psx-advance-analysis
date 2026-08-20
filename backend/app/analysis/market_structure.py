@@ -193,9 +193,47 @@ def analyze_market_stages(df: pd.DataFrame) -> Tuple[str, float]:
             
     return stage, slope
 
-def get_market_structure(df: pd.DataFrame) -> Dict[str, Any]:
+def add_provisional_swing(df: pd.DataFrame, swings: List[Dict[str, Any]], window: int) -> List[Dict[str, Any]]:
+    """
+    Swings are only confirmed once `window` bars have formed after the pivot, so
+    the most recent `window` bars can never be a swing -- Dow-theory trend then
+    lags the chart by that many bars (a full week on daily data). This appends a
+    single *provisional* pivot for the extreme forming in that unconfirmed tail,
+    of the opposite type to the last confirmed swing, so the trend reflects
+    recent price action instead of ignoring it.
+    """
+    n = len(df)
+    if n == 0:
+        return swings
+
+    last_idx = swings[-1]['index'] if swings else 0
+    last_type = swings[-1]['type'] if swings else None
+    tail_start = last_idx + 1
+    if tail_start >= n:
+        return swings
+
+    tail = df.iloc[tail_start:]
+    if last_type == 'low':
+        rel = int(tail['high'].values.argmax())
+        pos = tail_start + rel
+        pivot = {'index': pos, 'date': df['date'].iloc[pos], 'type': 'high',
+                 'price': float(df['high'].iloc[pos]), 'provisional': True}
+    else:
+        # No confirmed swing yet, or last was a high -> forming low.
+        rel = int(tail['low'].values.argmin())
+        pos = tail_start + rel
+        pivot = {'index': pos, 'date': df['date'].iloc[pos], 'type': 'low',
+                 'price': float(df['low'].iloc[pos]), 'provisional': True}
+
+    return swings + [pivot]
+
+
+def get_market_structure(df: pd.DataFrame, timeframe: str = '1d') -> Dict[str, Any]:
     """Runs all market structure analysis and returns standard dictionary."""
-    swings = find_swings(df)
+    # Smaller confirmation window reduces trend lag; intraday needs it tighter still.
+    swing_window = 2 if timeframe == 'int' else 3
+    swings = find_swings(df, window=swing_window)
+    swings = add_provisional_swing(df, swings, swing_window)
     classified = classify_swings(swings)
     dow_trend = analyze_dow_theory(classified)
     stage, slope = analyze_market_stages(df)
