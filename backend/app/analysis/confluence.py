@@ -18,12 +18,20 @@ def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     atr = atr.ffill().bfill()
     return atr
 
-def get_confluence_signal(df: pd.DataFrame, market_struct: Dict[str, Any], recent_patterns: List[Dict[str, Any]]) -> Dict[str, Any]:
+def get_confluence_signal(df: pd.DataFrame, market_struct: Dict[str, Any], recent_patterns: List[Dict[str, Any]], timeframe: str = '1d') -> Dict[str, Any]:
     """
     Aggregates technical metrics to output BUY/SELL/HOLD signal, confidence score,
     and trade levels (entry, stop loss, target).
+
+    Weighting is timeframe-aware. On daily data the slow-trend factors (market
+    stage + Dow theory) are deliberately down-weighted in favour of momentum so
+    the signal tracks the visible chart instead of lagging it by weeks. On
+    intraday (a single session) the 50/200-based structure factors are
+    meaningless, so they are disabled and momentum carries the signal.
     """
-    if df.empty or len(df) < 20:
+    is_intraday = timeframe == 'int'
+    min_required = 10 if is_intraday else 20
+    if df.empty or len(df) < min_required:
         return {
             'signal': 'HOLD',
             'confidence': 0.0,
@@ -44,39 +52,46 @@ def get_confluence_signal(df: pd.DataFrame, market_struct: Dict[str, Any], recen
     
     factors = []
     scores = []
-    
-    # 1. Market Stage (Weight: 20%)
-    stage = market_struct.get('market_stage', 'STAGE_1_ACCUMULATION')
-    stage_score = 0.0
-    if stage == 'STAGE_2_ADVANCING':
-        stage_score = 1.0
-        factors.append("Bullish: Market is in Stage 2 (Advancing)")
-    elif stage == 'STAGE_4_DECLINING':
-        stage_score = -1.0
-        factors.append("Bearish: Market is in Stage 4 (Declining)")
-    elif stage == 'STAGE_1_ACCUMULATION':
-        stage_score = 0.25
-        factors.append("Neutral-Bullish: Market in Stage 1 (Accumulation)")
-    elif stage == 'STAGE_3_DISTRIBUTION':
-        stage_score = -0.25
-        factors.append("Neutral-Bearish: Market in Stage 3 (Distribution)")
-    scores.append(stage_score * 0.20)
-    
-    # 2. Dow Theory Trend (Weight: 20%)
-    dow = market_struct.get('dow_trend', 'SIDEWAYS')
-    dow_score = 0.0
-    if dow == 'BULLISH':
-        dow_score = 1.0
-        factors.append("Bullish: Dow Theory trend is Bullish (HH/HL)")
-    elif dow == 'BEARISH':
-        dow_score = -1.0
-        factors.append("Bearish: Dow Theory trend is Bearish (LH/LL)")
+
+    # Timeframe-aware factor weights (must sum to 1.0).
+    if is_intraday:
+        w_stage, w_dow, w_ind, w_candle = 0.0, 0.0, 0.70, 0.30
     else:
+        w_stage, w_dow, w_ind, w_candle = 0.15, 0.15, 0.45, 0.25
+
+    # 1. Market Stage (slow-trend structure; disabled on intraday)
+    if w_stage > 0:
+        stage = market_struct.get('market_stage', 'STAGE_1_ACCUMULATION')
+        stage_score = 0.0
+        if stage == 'STAGE_2_ADVANCING':
+            stage_score = 1.0
+            factors.append("Bullish: Market is in Stage 2 (Advancing)")
+        elif stage == 'STAGE_4_DECLINING':
+            stage_score = -1.0
+            factors.append("Bearish: Market is in Stage 4 (Declining)")
+        elif stage == 'STAGE_1_ACCUMULATION':
+            stage_score = 0.25
+            factors.append("Neutral-Bullish: Market in Stage 1 (Accumulation)")
+        elif stage == 'STAGE_3_DISTRIBUTION':
+            stage_score = -0.25
+            factors.append("Neutral-Bearish: Market in Stage 3 (Distribution)")
+        scores.append(stage_score * w_stage)
+
+    # 2. Dow Theory Trend (slow-trend structure; disabled on intraday)
+    if w_dow > 0:
+        dow = market_struct.get('dow_trend', 'SIDEWAYS')
         dow_score = 0.0
-        factors.append("Neutral: Dow Theory trend is Sideways")
-    scores.append(dow_score * 0.20)
-    
-    # 3. Indicators (Weight: 35%)
+        if dow == 'BULLISH':
+            dow_score = 1.0
+            factors.append("Bullish: Dow Theory trend is Bullish (HH/HL)")
+        elif dow == 'BEARISH':
+            dow_score = -1.0
+            factors.append("Bearish: Dow Theory trend is Bearish (LH/LL)")
+        else:
+            factors.append("Neutral: Dow Theory trend is Sideways")
+        scores.append(dow_score * w_dow)
+
+    # 3. Indicators
     ind_scores = []
     
     # RSI
@@ -130,21 +145,25 @@ def get_confluence_signal(df: pd.DataFrame, market_struct: Dict[str, Any], recen
             ind_scores.append(-0.8)
             factors.append("Bearish: Price touched Upper Bollinger Band")
             
-    # EMA Crossovers
+    # EMA Crossovers -- require a small separation margin so a near-flat cross
+    # doesn't flip the signal back and forth bar to bar.
     if 'ema_20' in df.columns and 'ema_50' in df.columns:
         ema_20 = float(df['ema_20'].iloc[-1])
         ema_50 = float(df['ema_50'].iloc[-1])
-        if ema_20 > ema_50:
+        ema_margin = 0.001 * ema_50  # 0.1% dead-band around the cross
+        if ema_20 > ema_50 + ema_margin:
             ind_scores.append(0.5)
             factors.append("Bullish: Short-term EMA Golden Cross (EMA20 > EMA50)")
-        else:
+        elif ema_20 < ema_50 - ema_margin:
             ind_scores.append(-0.5)
             factors.append("Bearish: Short-term EMA Death Cross (EMA20 < EMA50)")
-            
+        else:
+            ind_scores.append(0.0)
+
     avg_ind_score = np.mean(ind_scores) if ind_scores else 0.0
-    scores.append(avg_ind_score * 0.35)
-    
-    # 4. Candlestick Patterns (Weight: 25%)
+    scores.append(avg_ind_score * w_ind)
+
+    # 4. Candlestick Patterns
     candle_score = 0.0
     # Check if a pattern occurred in the last 2 bars
     last_patterns = []
@@ -168,8 +187,8 @@ def get_confluence_signal(df: pd.DataFrame, market_struct: Dict[str, Any], recen
             candle_score = -1.0
             factors.append(f"Bearish: Candlestick Pattern detected ({bear_pats[0]['pattern']})")
             
-    scores.append(candle_score * 0.25)
-    
+    scores.append(candle_score * w_candle)
+
     # Aggregate total score
     total_score = float(np.sum(scores))
     

@@ -5,9 +5,13 @@ from app.analysis.market_structure import get_market_structure
 from app.analysis.candlesticks import detect_candlestick_patterns
 from app.analysis.confluence import get_confluence_signal
 
-def run_analysis_pipeline(df: pd.DataFrame, min_bars: int = 20) -> Dict[str, Any]:
+def run_analysis_pipeline(df: pd.DataFrame, min_bars: int = 20, timeframe: str = '1d') -> Dict[str, Any]:
     """
     Orchestrates all analysis modules on a standardized OHLCV DataFrame.
+
+    `timeframe` ('1d' or 'int') tunes indicator periods, market-structure
+    sensitivity and signal weighting so intraday sessions and daily EOD are each
+    analysed appropriately.
     """
     if df.empty or len(df) < min_bars:
         return {
@@ -15,18 +19,18 @@ def run_analysis_pipeline(df: pd.DataFrame, min_bars: int = 20) -> Dict[str, Any
             'message': f'Insufficient data points (minimum {min_bars} required, got {len(df)})',
             'data': {}
         }
-        
+
     # 1. Add Technical Indicators (SMA, EMA, RSI, MACD, BB)
-    df_indicators = add_all_indicators(df)
-    
+    df_indicators = add_all_indicators(df, timeframe=timeframe)
+
     # 2. Extract Market Structure (Swings, Dow trend, Stan Weinstein Stage)
-    market_struct = get_market_structure(df_indicators)
-    
+    market_struct = get_market_structure(df_indicators, timeframe=timeframe)
+
     # 3. Detect Candlestick Patterns (Hammer, Shooting Star, Engulfing, etc.)
     patterns = detect_candlestick_patterns(df_indicators)
-    
+
     # 4. Generate confluence BUY/SELL/HOLD signals and Risk levels
-    signal_results = get_confluence_signal(df_indicators, market_struct, patterns)
+    signal_results = get_confluence_signal(df_indicators, market_struct, patterns, timeframe=timeframe)
     
     # 5. Format OHLCV + Indicators data for frontend charting
     # Convert dates to ISO strings for JSON serialization

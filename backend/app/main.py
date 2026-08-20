@@ -77,10 +77,10 @@ async def get_analysis(symbol: str, timeframe: str = Query("1d", regex="^(1d|int
                 detail=f"No data returned for symbol '{symbol}' with timeframe '{timeframe}'"
             )
             
-        # Intraday 15-minute candles from PSX only cover the current session,
+        # Intraday 5-minute candles from PSX only cover the current session,
         # so use a lower bar minimum than daily EOD analysis.
-        min_bars = 2 if timeframe == 'int' else 20
-        analysis_result = run_analysis_pipeline(df, min_bars=min_bars)
+        min_bars = 10 if timeframe == 'int' else 20
+        analysis_result = run_analysis_pipeline(df, min_bars=min_bars, timeframe=timeframe)
 
         if analysis_result.get('status') == 'error':
             raise HTTPException(

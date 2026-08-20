@@ -39,29 +39,45 @@ def calculate_bollinger_bands(df: pd.DataFrame, period: int = 20, num_std: float
     lower_band = middle_band - (num_std * std_dev)
     return upper_band, middle_band, lower_band
 
-def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """Adds standard indicators to the DataFrame."""
+def add_all_indicators(df: pd.DataFrame, timeframe: str = '1d') -> pd.DataFrame:
+    """
+    Adds standard indicators to the DataFrame.
+
+    Periods are tuned per timeframe: daily EOD uses classic 20/50/200 with
+    RSI-14 and MACD-12/26/9. Intraday (a single session of 5-min candles) uses
+    much shorter fast/mid/slow periods and RSI/MACD so the indicators actually
+    warm up within the limited number of bars available.
+    """
     if df.empty or len(df) < 5:
         return df
-        
+
+    if timeframe == 'int':
+        p_fast, p_mid, p_slow = 9, 21, 50
+        rsi_period, macd_params, bb_period = 9, (6, 13, 5), 20
+    else:
+        p_fast, p_mid, p_slow = 20, 50, 200
+        rsi_period, macd_params, bb_period = 14, (12, 26, 9), 20
+
     df = df.copy()
-    df['sma_20'] = calculate_sma(df, 20)
-    df['sma_50'] = calculate_sma(df, 50)
-    df['sma_200'] = calculate_sma(df, 200)
-    df['ema_20'] = calculate_ema(df, 20)
-    df['ema_50'] = calculate_ema(df, 50)
-    df['ema_200'] = calculate_ema(df, 200)
-    
-    df['rsi'] = calculate_rsi(df, 14)
-    
-    macd_line, signal_line, macd_hist = calculate_macd(df)
+    # Column names stay fixed (fast=..._20, mid=..._50, slow=..._200) so the
+    # frontend chart and downstream scoring keep working across timeframes.
+    df['sma_20'] = calculate_sma(df, p_fast)
+    df['sma_50'] = calculate_sma(df, p_mid)
+    df['sma_200'] = calculate_sma(df, p_slow)
+    df['ema_20'] = calculate_ema(df, p_fast)
+    df['ema_50'] = calculate_ema(df, p_mid)
+    df['ema_200'] = calculate_ema(df, p_slow)
+
+    df['rsi'] = calculate_rsi(df, rsi_period)
+
+    macd_line, signal_line, macd_hist = calculate_macd(df, *macd_params)
     df['macd_line'] = macd_line
     df['macd_signal'] = signal_line
     df['macd_hist'] = macd_hist
-    
-    bb_upper, bb_middle, bb_lower = calculate_bollinger_bands(df)
+
+    bb_upper, bb_middle, bb_lower = calculate_bollinger_bands(df, bb_period)
     df['bb_upper'] = bb_upper
     df['bb_middle'] = bb_middle
     df['bb_lower'] = bb_lower
-    
+
     return df
