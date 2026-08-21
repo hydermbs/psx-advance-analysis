@@ -151,12 +151,15 @@ class PSXDataAdapter(BaseDataAdapter):
             return df
 
         new_row = {k: mw[k] for k in ['date', 'open', 'high', 'low', 'close', 'volume']}
-        if not df.empty:
-            last_date = df['date'].iloc[-1]
-            if hasattr(last_date, 'date') and last_date.date() == mw['date'].date():
-                # Same session already present from EOD -> replace with real O/H/L/C.
-                df = df.iloc[:-1]
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+        # Collapse to one bar per calendar day, keeping the last occurrence so the
+        # real market-watch OHLC wins over the body-only EOD bar for that session.
+        # (The EOD feed timestamps sessions at 11:00 UTC while the stitched bar is
+        # at 00:00, so a same-day match must be de-duplicated by day, not by row --
+        # otherwise the chart sees two bars sharing a date and rejects the series.)
+        df['_day'] = pd.to_datetime(df['date']).dt.normalize()
+        df = df.drop_duplicates(subset='_day', keep='last').drop(columns='_day')
         return df.sort_values('date').reset_index(drop=True)
 
     async def _get_intraday(self, symbol: str) -> pd.DataFrame:
