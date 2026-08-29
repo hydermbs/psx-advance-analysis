@@ -35,6 +35,17 @@ interface ChartContainerProps {
   symbol: string;
 }
 
+// lightweight-charts requires data strictly ascending by time with no duplicate
+// timestamps. Sort ascending and collapse duplicates (keeping the last point for
+// a given time) so setData never throws "data must be asc ordered by time".
+function sanitizeSeries<T extends { time: any }>(points: T[]): T[] {
+  const byTime = new Map<any, T>();
+  for (const p of points) byTime.set(p.time, p);
+  return Array.from(byTime.values()).sort((a, b) =>
+    a.time < b.time ? -1 : a.time > b.time ? 1 : 0
+  );
+}
+
 export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patterns = [], timeframe, symbol }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [showEma20, setShowEma20] = useState(true);
@@ -151,7 +162,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patte
       };
     });
 
-    candleSeriesRef.current.setData(formattedCandles);
+    candleSeriesRef.current.setData(sanitizeSeries(formattedCandles));
 
     // Prepare Volume data
     if (volumeSeriesRef.current) {
@@ -166,7 +177,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patte
           color: d.close >= d.open ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
         };
       });
-      volumeSeriesRef.current.setData(formattedVolume);
+      volumeSeriesRef.current.setData(sanitizeSeries(formattedVolume));
     }
 
     // Set EMAs
@@ -178,7 +189,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patte
             time: (timeframe === 'int' ? Math.floor(new Date(d.time).getTime() / 1000) : d.time.split('T')[0]) as any,
             value: d.ema_20!,
           }));
-        ema20SeriesRef.current.setData(ema20Data);
+        ema20SeriesRef.current.setData(sanitizeSeries(ema20Data));
       } else {
         ema20SeriesRef.current.setData([]);
       }
@@ -192,7 +203,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patte
             time: (timeframe === 'int' ? Math.floor(new Date(d.time).getTime() / 1000) : d.time.split('T')[0]) as any,
             value: d.ema_50!,
           }));
-        ema50SeriesRef.current.setData(ema50Data);
+        ema50SeriesRef.current.setData(sanitizeSeries(ema50Data));
       } else {
         ema50SeriesRef.current.setData([]);
       }
@@ -206,7 +217,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patte
             time: (timeframe === 'int' ? Math.floor(new Date(d.time).getTime() / 1000) : d.time.split('T')[0]) as any,
             value: d.ema_200!,
           }));
-        ema200SeriesRef.current.setData(ema200Data);
+        ema200SeriesRef.current.setData(sanitizeSeries(ema200Data));
       } else {
         ema200SeriesRef.current.setData([]);
       }
@@ -217,9 +228,9 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patte
     if (bbUpperSeriesRef.current && bbMiddleSeriesRef.current && bbLowerSeriesRef.current) {
       if (showBands) {
         const t = (d: any) => (timeframe === 'int' ? Math.floor(new Date(d.time).getTime() / 1000) : d.time.split('T')[0]) as any;
-        bbUpperSeriesRef.current.setData(data.filter((d) => d.bb_upper !== undefined).map((d) => ({ time: t(d), value: d.bb_upper! })));
-        bbMiddleSeriesRef.current.setData(data.filter((d) => d.bb_middle !== undefined).map((d) => ({ time: t(d), value: d.bb_middle! })));
-        bbLowerSeriesRef.current.setData(data.filter((d) => d.bb_lower !== undefined).map((d) => ({ time: t(d), value: d.bb_lower! })));
+        bbUpperSeriesRef.current.setData(sanitizeSeries(data.filter((d) => d.bb_upper !== undefined).map((d) => ({ time: t(d), value: d.bb_upper! }))));
+        bbMiddleSeriesRef.current.setData(sanitizeSeries(data.filter((d) => d.bb_middle !== undefined).map((d) => ({ time: t(d), value: d.bb_middle! }))));
+        bbLowerSeriesRef.current.setData(sanitizeSeries(data.filter((d) => d.bb_lower !== undefined).map((d) => ({ time: t(d), value: d.bb_lower! }))));
       } else {
         bbUpperSeriesRef.current.setData([]);
         bbMiddleSeriesRef.current.setData([]);
@@ -251,6 +262,7 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({ data = [], patte
           });
         }
       });
+      markers.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
       createSeriesMarkers(candleSeriesRef.current, markers);
     }
   }, [data, showEma20, showEma50, showEma200, showBB, patterns, timeframe]);
