@@ -55,9 +55,10 @@ def get_confluence_signal(df: pd.DataFrame, market_struct: Dict[str, Any], recen
 
     # Timeframe-aware factor weights (must sum to 1.0).
     if is_intraday:
-        w_stage, w_dow, w_ind, w_candle = 0.0, 0.0, 0.70, 0.30
+        w_stage, w_dow, w_ind, w_support, w_candle = 0.0, 0.0, 0.60, 0.10, 0.30
     else:
-        w_stage, w_dow, w_ind, w_candle = 0.15, 0.15, 0.45, 0.25
+     
+        w_stage, w_dow, w_ind, w_support, w_candle = 0.05, 0.05, 0.50, 0.15, 0.25
 
     # 1. Market Stage (slow-trend structure; disabled on intraday)
     if w_stage > 0:
@@ -111,28 +112,29 @@ def get_confluence_signal(df: pd.DataFrame, market_struct: Dict[str, Any], recen
     else:
         ind_scores.append(0.0)
         
-    # MACD
+
     if 'macd_line' in df.columns and 'macd_signal' in df.columns:
         macd_line = float(df['macd_line'].iloc[-1])
         macd_sig = float(df['macd_signal'].iloc[-1])
         macd_hist = float(df['macd_hist'].iloc[-1])
-        
+        prev_hist = float(df['macd_hist'].iloc[-2]) if len(df) >= 2 else macd_hist
+        rising = macd_hist > prev_hist
+
         if macd_line > macd_sig:
-            score_m = 0.5
-            if macd_hist > 0 and macd_hist > float(df['macd_hist'].iloc[-2]):
-                score_m += 0.5
-                factors.append("Bullish: MACD Crossover with expanding histogram")
+            if rising:
+                score_m = 1.0
+                factors.append("Bullish: MACD above Signal with expanding histogram")
             else:
-                factors.append("Bullish: MACD is above Signal line")
-            ind_scores.append(score_m)
+                score_m = 0.3
+                factors.append("Bullish: MACD above Signal but momentum fading")
         else:
-            score_m = -0.5
-            if macd_hist < 0 and macd_hist < float(df['macd_hist'].iloc[-2]):
-                score_m -= 0.5
-                factors.append("Bearish: MACD Bearish Crossover with expanding histogram")
+            if rising:
+                score_m = -0.2
+                factors.append("Bearish (weakening): MACD below Signal but histogram rising toward a cross")
             else:
-                factors.append("Bearish: MACD is below Signal line")
-            ind_scores.append(score_m)
+                score_m = -1.0
+                factors.append("Bearish: MACD below Signal with expanding histogram")
+        ind_scores.append(score_m)
             
     # Bollinger Bands
     if 'bb_upper' in df.columns and 'bb_lower' in df.columns:
@@ -163,7 +165,40 @@ def get_confluence_signal(df: pd.DataFrame, market_struct: Dict[str, Any], recen
     avg_ind_score = np.mean(ind_scores) if ind_scores else 0.0
     scores.append(avg_ind_score * w_ind)
 
-    # 4. Candlestick Patterns
+  
+    support_score = 0.0
+    if w_support > 0 and len(df) >= 3:
+        lookback = min(len(df), 10)
+        window_low = float(df['low'].iloc[-lookback:].min())
+        window_high = float(df['high'].iloc[-lookback:].max())
+        prev_close = float(df['close'].iloc[-2])
+
+        def _val(col):
+            if col in df.columns and not pd.isna(df[col].iloc[-1]):
+                return float(df[col].iloc[-1])
+            return None
+
+        support_levels = [lvl for lvl in (_val('ema_200'), _val('bb_lower')) if lvl is not None]
+        resistance_levels = [lvl for lvl in (_val('ema_200'), _val('bb_upper')) if lvl is not None]
+
+        # Did the recent low come down to within +/-3% of a support level...
+        near_support = any(lvl * 0.97 <= window_low <= lvl * 1.03 for lvl in support_levels)
+        # ...and has price since reclaimed it (closed >1.5% off the low and holding)?
+        reclaimed = current_close > window_low * 1.015 and current_close >= prev_close
+        if near_support and reclaimed:
+            support_score = 1.0
+            factors.append(f"Bullish: Price bounced off support (~{window_low:.2f}) and is holding")
+
+        if support_score == 0.0:
+            near_resistance = any(lvl * 0.97 <= window_high <= lvl * 1.03 for lvl in resistance_levels)
+            rejected = current_close < window_high * 0.985 and current_close <= prev_close
+            if near_resistance and rejected:
+                support_score = -1.0
+                factors.append(f"Bearish: Price rejected at resistance (~{window_high:.2f})")
+
+    scores.append(support_score * w_support)
+
+    # 5. Candlestick Patterns
     candle_score = 0.0
     # Check if a pattern occurred in the last 2 bars
     last_patterns = []

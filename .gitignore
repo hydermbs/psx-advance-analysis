@@ -78,3 +78,6 @@ backend/watchlist.db
 
 # ───── Misc ─────
 .omc/
+
+# ───── graphify ─────
+graphify-out/
