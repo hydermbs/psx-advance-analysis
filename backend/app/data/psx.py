@@ -1,23 +1,71 @@
 import re
-import httpx
-import pandas as pd
+import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from app.data.adapter import BaseDataAdapter
+
+
+_PS_TOKEN_RE = re.compile(r'window\.__ps\s*=\s*(\{.*?\})\s*;', re.S)
+
 
 class PSXDataAdapter(BaseDataAdapter):
     def __init__(self):
         self.base_url = "https://dps.psx.com.pk"
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36',
+            'X-Requested-With': 'XMLHttpRequest',
+            'sec-ch-ua': '"Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
         }
+        self._token: Optional[str] = None
+
+    async def _get_token(self, client: httpx.AsyncClient, refresh: bool = False) -> Optional[str]:
+        """Return PSX's window.__ps._k request key, scraping it from a page and
+        caching it. Re-fetches when missing or when `refresh` is set (after a 403)."""
+        if self._token and not refresh:
+            return self._token
+        try:
+            resp = await client.get(f"{self.base_url}/", headers=self.headers, timeout=10.0)
+            resp.raise_for_status()
+            match = _PS_TOKEN_RE.search(resp.text)
+            if match:
+                self._token = json.loads(match.group(1)).get("_k")
+        except Exception as e:
+            print(f"Error fetching PSX request token: {e}")
+        return self._token
+
+    async def _api_get(self, client: httpx.AsyncClient, path: str, symbol: str = "") -> httpx.Response:
+        """GET a PSX API endpoint with the required X-Req-Id key, refreshing the key
+        and retrying once if the server rejects it (401/403). Every PSX data route
+        (/symbols, /market-watch, /timeseries/*) is gated by this key."""
+        url = f"{self.base_url}{path}"
+        referer = f"{self.base_url}/company/{symbol}" if symbol else f"{self.base_url}/"
+        response = None
+        for attempt in range(2):
+            token = await self._get_token(client, refresh=(attempt == 1))
+            headers = {
+                **self.headers,
+                'Referer': referer,
+                'X-Req-Id': token or '',
+            }
+            response = await client.get(url, headers=headers, timeout=10.0)
+            if response.status_code in (401, 403) and attempt == 0:
+                self._token = None  # stale key -> force a refresh on the retry
+                continue
+            break
+        response.raise_for_status()
+        return response
 
     async def get_symbols(self) -> List[Dict[str, Any]]:
-        url = f"{self.base_url}/symbols"
         async with httpx.AsyncClient(verify=False) as client:
             try:
-                response = await client.get(url, headers=self.headers, timeout=10.0)
-                response.raise_for_status()
+                response = await self._api_get(client, "/symbols")
                 data = response.json()
                 
                 symbols = []
@@ -41,11 +89,9 @@ class PSXDataAdapter(BaseDataAdapter):
             return await self._get_eod(symbol)
 
     async def _get_eod(self, symbol: str) -> pd.DataFrame:
-        url = f"{self.base_url}/timeseries/eod/{symbol}"
         async with httpx.AsyncClient(verify=False) as client:
             try:
-                response = await client.get(url, headers=self.headers, timeout=10.0)
-                response.raise_for_status()
+                response = await self._api_get(client, f"/timeseries/eod/{symbol}", symbol)
                 payload = response.json()
                 
                 raw_data = payload.get('data', [])
@@ -99,11 +145,9 @@ class PSXDataAdapter(BaseDataAdapter):
         table (columns: symbol, listed(MMDD), sector, ldcp, open, high, low, close,
         change, pct, volume, ...). Returns None if unavailable.
         """
-        url = f"{self.base_url}/market-watch"
         async with httpx.AsyncClient(verify=False) as client:
             try:
-                response = await client.get(url, headers=self.headers, timeout=10.0)
-                response.raise_for_status()
+                response = await self._api_get(client, "/market-watch", symbol)
                 html = response.text
             except Exception as e:
                 print(f"Error fetching PSX market-watch for {symbol}: {e}")
@@ -163,11 +207,9 @@ class PSXDataAdapter(BaseDataAdapter):
         return df.sort_values('date').reset_index(drop=True)
 
     async def _get_intraday(self, symbol: str) -> pd.DataFrame:
-        url = f"{self.base_url}/timeseries/int/{symbol}"
         async with httpx.AsyncClient(verify=False) as client:
             try:
-                response = await client.get(url, headers=self.headers, timeout=10.0)
-                response.raise_for_status()
+                response = await self._api_get(client, f"/timeseries/int/{symbol}", symbol)
                 payload = response.json()
                 
                 raw_data = payload.get('data', [])
